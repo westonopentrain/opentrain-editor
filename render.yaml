@@ -1,6 +1,6 @@
 databases:
   - name: opentrain-docs
-    plan: free
+    plan: starter
 
 services:
   # 1) Static editor from apps/editor
