@@ -1,6 +1,6 @@
 # OpenTrain Document Service (docsvc)
 
-A lightweight Fastify API that stores documents in memory today and will evolve into the persistence and AI backend for OpenTrain content workflows.
+A lightweight Fastify API that persists documents to Postgres and powers the future persistence and AI backend for OpenTrain content workflows.
 
 ## Getting Started
 
@@ -28,6 +28,7 @@ The server listens on `http://localhost:3001` by default. Use `npm start` for pr
 # Upsert a document
 curl -X PUT http://localhost:3001/docs/doc-123 \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer ${DOCSVC_API_KEY}' \
   -d '{
     "title": "Role description",
     "jobId": "job-001",
@@ -36,13 +37,19 @@ curl -X PUT http://localhost:3001/docs/doc-123 \
   }'
 
 # Fetch a document
-curl http://localhost:3001/docs/doc-123
+curl -H 'Authorization: Bearer ${DOCSVC_API_KEY}' http://localhost:3001/docs/doc-123
 
 # Convert Editor.js payload
 curl -X POST http://localhost:3001/docs/migrate/editorjs \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer ${DOCSVC_API_KEY}' \
   -d '{ "edjs": { "blocks": [{ "type": "paragraph", "data": { "text": "Hello" } }] } }'
 ```
+
+## Authentication and CORS
+
+- `/docs/*` routes require a bearer token: include `Authorization: Bearer ${DOCSVC_API_KEY}` in every request. `/health` remains public for uptime checks.
+- `ALLOWED_ORIGINS` controls which browser origins Fastify will accept. Provide a comma-separated list (e.g. `https://*.bubbleapps.io,https://opentrain-editor.onrender.com`). When empty, any origin is accepted (useful for local development).
 
 ## Shared Utilities
 

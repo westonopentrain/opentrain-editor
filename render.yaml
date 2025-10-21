@@ -1,3 +1,7 @@
+databases:
+  - name: opentrain-docs
+    plan: free
+
 services:
   # 1) Static editor from apps/editor
   - type: web
@@ -30,16 +34,14 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Future:
-      # - key: DATABASE_URL
-      #   fromDatabase:
-      #     name: opentrain-docs
-      #     property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opentrain-docs
+          property: connectionString
+      - key: DOCSVC_API_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://*.bubbleapps.io,https://opentrain-editor.onrender.com
     buildFilter:
       paths:
         - apps/docsvc/**
-
-# Optional: add a Postgres database later, then wire DATABASE_URL above.
-# databases:
-#   - name: opentrain-docs
-#     plan: free
