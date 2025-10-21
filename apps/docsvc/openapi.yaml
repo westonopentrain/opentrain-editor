@@ -24,6 +24,8 @@ paths:
   /docs:
     get:
       summary: List documents for a Bubble job
+      security:
+        - apiKeyAuth: []
       parameters:
         - in: query
           name: jobId
@@ -47,6 +49,8 @@ paths:
   /docs/{id}:
     get:
       summary: Fetch a document by id
+      security:
+        - apiKeyAuth: []
       parameters:
         - in: path
           name: id
@@ -68,6 +72,8 @@ paths:
                 $ref: '#/components/schemas/Error'
     put:
       summary: Upsert document metadata and content
+      security:
+        - apiKeyAuth: []
       parameters:
         - in: path
           name: id
@@ -90,6 +96,8 @@ paths:
   /docs/migrate/editorjs:
     post:
       summary: Convert an Editor.js payload into Tiptap JSON and HTML
+      security:
+        - apiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -116,6 +124,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 components:
+  securitySchemes:
+    apiKeyAuth:
+      type: http
+      scheme: bearer
   schemas:
     JobDoc:
       type: object
@@ -172,7 +184,10 @@ components:
         position:
           type: number
         tiptapJson:
-          $ref: '#/components/schemas/TiptapDoc'
+          description: Tiptap JSON payload; accepts an object or a stringified JSON document.
+          oneOf:
+            - $ref: '#/components/schemas/TiptapDoc'
+            - type: string
         htmlSnapshot:
           type: string
     EditorJsDocument:

@@ -1,4 +1,4 @@
-import { getDoc, upsertDoc, listDocsByJob } from '../lib/store.js';
+import { getDoc, upsertDoc, listDocsByJob } from '../lib/store_pg.js';
 import { edjsToHtml, edjsToTiptap } from '../lib/converters.js';
 import { asString, isTiptapDoc } from '../lib/validate.js';
 
@@ -6,7 +6,7 @@ export async function docsRoutes(app) {
   // GET /docs/:id
   app.get('/:id', async (request, reply) => {
     const { id } = request.params;
-    const doc = getDoc(id);
+    const doc = await getDoc(id);
     if (!doc) {
       return reply.code(404).send({ error: 'Not found' });
     }
@@ -19,12 +19,7 @@ export async function docsRoutes(app) {
     if (!jobId) {
       return { items: [] };
     }
-    const items = listDocsByJob(jobId);
-    items.sort(
-      (a, b) =>
-        (a.position ?? 0) - (b.position ?? 0) ||
-        String(b.updatedAt).localeCompare(String(a.updatedAt))
-    );
+    const items = await listDocsByJob(jobId);
     return { items };
   });
 
@@ -33,20 +28,42 @@ export async function docsRoutes(app) {
     const { id } = request.params;
     const body = request.body || {};
     const payload = {};
+    const maxSize = 1024 * 1024; // ~1MB
 
     if (typeof body.title === 'string') payload.title = body.title;
     if (typeof body.jobId === 'string') payload.jobId = body.jobId;
     if (typeof body.folderId === 'string') payload.folderId = body.folderId;
     if (Number.isFinite(body.position)) payload.position = body.position;
 
-    if (body.tiptapJson && isTiptapDoc(body.tiptapJson)) {
-      payload.tiptapJson = body.tiptapJson;
+    let tiptapCandidate = body.tiptapJson;
+    if (typeof tiptapCandidate === 'string') {
+      if (Buffer.byteLength(tiptapCandidate, 'utf8') > maxSize) {
+        return reply.code(413).send({ error: 'tiptapJson payload too large' });
+      }
+      try {
+        tiptapCandidate = JSON.parse(tiptapCandidate);
+      } catch (error) {
+        return reply.code(400).send({ error: 'Invalid tiptapJson JSON' });
+      }
+    }
+    if (tiptapCandidate) {
+      const serialized = JSON.stringify(tiptapCandidate);
+      if (Buffer.byteLength(serialized, 'utf8') > maxSize) {
+        return reply.code(413).send({ error: 'tiptapJson payload too large' });
+      }
+      if (!isTiptapDoc(tiptapCandidate)) {
+        return reply.code(400).send({ error: 'Invalid tiptapJson document' });
+      }
+      payload.tiptapJson = tiptapCandidate;
     }
     if (typeof body.htmlSnapshot === 'string') {
+      if (Buffer.byteLength(body.htmlSnapshot, 'utf8') > maxSize) {
+        return reply.code(413).send({ error: 'htmlSnapshot payload too large' });
+      }
       payload.htmlSnapshot = body.htmlSnapshot;
     }
 
-    const saved = upsertDoc(id, payload);
+    const saved = await upsertDoc(id, payload);
     return reply.code(200).send(saved);
   });
 

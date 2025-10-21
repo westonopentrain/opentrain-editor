@@ -3,18 +3,52 @@ import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import { docsRoutes } from './routes/docs.js';
 import { healthRoutes } from './routes/health.js';
+import { migrate } from './lib/migrate.js';
+import { pool } from './lib/db.js';
 
 const app = Fastify({ logger: true });
 
-// Permissive in dev; tighten later via env var ALLOWED_ORIGINS
+const docsApiKey = process.env.DOCSVC_API_KEY;
+if (!docsApiKey) {
+  throw new Error('DOCSVC_API_KEY env var is required');
+}
+
+await migrate(pool);
+
+const allowlist = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 await app.register(cors, {
-  origin: (origin, cb) => cb(null, true),
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowlist.length === 0) return cb(null, true);
+    cb(null, allowlist.includes(origin));
+  },
   credentials: true,
 });
 await app.register(formbody);
 
 app.register(healthRoutes, { prefix: '/health' });
-app.register(docsRoutes, { prefix: '/docs' });
+
+app.register(
+  async (instance) => {
+    instance.addHook('preValidation', async (request, reply) => {
+      const auth = request.headers.authorization;
+      if (!auth || !auth.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      const token = auth.slice('Bearer '.length).trim();
+      if (token !== docsApiKey) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+    });
+
+    await instance.register(docsRoutes);
+  },
+  { prefix: '/docs' }
+);
 
 const port = process.env.PORT || 3001;
 app
