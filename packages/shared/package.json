@@ -1,0 +1,11 @@
+{
+  "name": "@opentrain/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./edjs_to_html.js": "./src/edjs_to_html.js",
+    "./edjs_to_tiptap.js": "./src/edjs_to_tiptap.js",
+    "./types.d.ts": "./src/types.d.ts"
+  }
+}

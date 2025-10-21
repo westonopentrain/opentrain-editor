@@ -1,0 +1,209 @@
+openapi: 3.0.3
+info:
+  title: OpenTrain Document Service
+  version: 0.1.0
+  description: >-
+    Minimal API surface for storing documents and converting Editor.js payloads.
+servers:
+  - url: http://localhost:3001
+paths:
+  /health:
+    get:
+      summary: Service health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+  /docs:
+    get:
+      summary: List documents for a Bubble job
+      parameters:
+        - in: query
+          name: jobId
+          schema:
+            type: string
+          required: true
+          description: Bubble job identifier
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobDoc'
+                required: [items]
+  /docs/{id}:
+    get:
+      summary: Fetch a document by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDoc'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Upsert document metadata and content
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertDocRequest'
+      responses:
+        '200':
+          description: Document saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDoc'
+  /docs/migrate/editorjs:
+    post:
+      summary: Convert an Editor.js payload into Tiptap JSON and HTML
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrateEditorJsRequest'
+      responses:
+        '200':
+          description: Conversion succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrateEditorJsResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Conversion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    JobDoc:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+          nullable: true
+        folderId:
+          type: string
+          nullable: true
+        position:
+          type: number
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        tiptapJson:
+          $ref: '#/components/schemas/TiptapDoc'
+          nullable: true
+        htmlSnapshot:
+          type: string
+          nullable: true
+        version:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, version, createdAt, updatedAt]
+    TiptapDoc:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [doc]
+        content:
+          type: array
+          items:
+            type: object
+      required: [type, content]
+    UpsertDocRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        jobId:
+          type: string
+        folderId:
+          type: string
+        position:
+          type: number
+        tiptapJson:
+          $ref: '#/components/schemas/TiptapDoc'
+        htmlSnapshot:
+          type: string
+    EditorJsDocument:
+      type: object
+      properties:
+        time:
+          type: number
+        version:
+          type: string
+        blocks:
+          type: array
+          items:
+            type: object
+      required: [blocks]
+    MigrateEditorJsRequest:
+      type: object
+      properties:
+        edjs:
+          $ref: '#/components/schemas/EditorJsDocument'
+      required: [edjs]
+    MigrateEditorJsResponse:
+      type: object
+      properties:
+        tiptapJson:
+          $ref: '#/components/schemas/TiptapDoc'
+        html:
+          type: string
+      required: [tiptapJson, html]
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
