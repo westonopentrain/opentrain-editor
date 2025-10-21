@@ -321,14 +321,14 @@ const editor = new Editor({
   onCreate() {
     postReady();
     updateToolbarState();
-    updateCharacterCount();
+    try { updateCharacterCount(); } catch (e) {}
   },
   onSelectionUpdate() {
     updateToolbarState();
     postSelection();
   },
   onUpdate() {
-    updateCharacterCount();
+    try { updateCharacterCount(); } catch (e) {}
     debouncedChange();
   },
 });
@@ -404,8 +404,17 @@ function updateToolbarState() {
 }
 
 function updateCharacterCount() {
-  const count = editor.storage.characterCount.characters();
-  characterCount.textContent = `${count} character${count === 1 ? '' : 's'}`;
+  try {
+    const mod = editor?.storage?.characterCount;
+    const count = (mod && typeof mod.characters === 'function')
+      ? mod.characters()
+      : (editor?.state?.doc?.textContent || '').length;
+    if (typeof characterCount !== 'undefined' && characterCount) {
+      characterCount.textContent = `${count} character${count === 1 ? '' : 's'}`;
+    }
+  } catch (e) {
+    // no-op; don’t block onUpdate
+  }
 }
 
 function execToolbarCommand(button) {
