@@ -115,6 +115,48 @@ app.put('/api/docs/:id', verifyToken, async (req, res) => {
   }
 });
 
+app.delete('/api/docs/:id', verifyToken, async (req, res) => {
+  if (req.auth?.perms !== 'rw') {
+    return res.status(403).json({ error: 'read_only' });
+  }
+  if (!DOCSVC_API_KEY) {
+    return res.status(503).json({ error: 'doc_service_unavailable' });
+  }
+  try {
+    const { id } = req.params;
+    const headers = {
+      Authorization: `Bearer ${DOCSVC_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+
+    const docResp = await fetch(`${DOCSVC_URL}/docs/${encodeURIComponent(id)}`, { method: 'GET', headers });
+    if (docResp.status === 404) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    if (!docResp.ok) {
+      const text = await docResp.text().catch(() => '');
+      throw new Error(`docsvc GET /docs/${id} -> ${docResp.status}: ${text}`.trim());
+    }
+    const doc = await docResp.json().catch(() => ({}));
+    if (doc?.jobId && doc.jobId !== req.auth.jobId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+
+    const delResp = await fetch(`${DOCSVC_URL}/docs/${encodeURIComponent(id)}`, { method: 'DELETE', headers });
+    if (delResp.status === 404) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    if (!delResp.ok) {
+      const text = await delResp.text().catch(() => '');
+      throw new Error(`docsvc DELETE /docs/${id} -> ${delResp.status}: ${text}`.trim());
+    }
+    const payload = await delResp.json().catch(() => ({}));
+    res.json(payload || {});
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get('/api/jobs/:jobId/docs', verifyToken, async (req, res) => {
   const { jobId } = req.params;
   if (jobId !== req.auth.jobId) {

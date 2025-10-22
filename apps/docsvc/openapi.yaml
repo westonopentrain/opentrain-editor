@@ -93,6 +93,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobDoc'
+    delete:
+      summary: Delete a document and any direct subpages
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedIds:
+                    type: array
+                    items:
+                      type: string
+                required: [deletedIds]
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /docs/migrate/editorjs:
     post:
       summary: Convert an Editor.js payload into Tiptap JSON and HTML
