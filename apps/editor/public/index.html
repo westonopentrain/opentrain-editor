@@ -78,13 +78,17 @@
         // 1) Tell Bubble "I'm ready"
         try {
           window.parent && window.parent.postMessage({ type: 'ready' }, '*');
+          console.debug('[OpenTrain child] → parent: ready');
         } catch (e) {}
 
         // 2) On every edit, send HTML + JSON up to Bubble
         editor.on('update', ({ editor }) => {
           try {
+            const html = editor.getHTML();
+            const _htmlLen = html.length;
+            console.debug('[OpenTrain child] → parent: change', { htmlLen: _htmlLen });
             window.parent.postMessage(
-              { type: 'change', html: editor.getHTML(), json: editor.getJSON() },
+              { type: 'change', html, json: editor.getJSON() },
               '*'
             );
           } catch (e) {}
@@ -93,6 +97,7 @@
         // 3) Listen for commands from Bubble (load content, insert image, set read-only)
         window.addEventListener('message', (e) => {
           const msg = (e && e.data) || {};
+          console.debug('[OpenTrain child] ← parent:', msg);
           if (msg.type === 'load') {
             if (msg.html) {
               // Tiptap can accept HTML strings
@@ -101,6 +106,11 @@
               // Or TipTap JSON
               editor.commands.setContent(msg.json);
             }
+            const htmlLen = typeof msg.html === 'string' ? msg.html.length : 0;
+            console.debug('[OpenTrain child] content set from parent', {
+              used: msg.html ? 'html' : (msg.json ? 'json' : 'none'),
+              htmlLen,
+            });
             return;
           }
           if (msg.type === 'insertImage' && msg.src) {
@@ -114,6 +124,6 @@
         });
       };
     </script>
-    <script type="module" src="main.js?v=2025-10-21a"></script>
+    <script type="module" src="main.js?v=2025-10-22b"></script>
   </body>
 </html>
