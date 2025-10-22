@@ -10,4 +10,5 @@ create table if not exists docs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index if not exists idx_docs_job on docs(job_id);
+create index if not exists idx_docs_jobid on docs(job_id);
+create index if not exists idx_docs_folderid on docs(folder_id);

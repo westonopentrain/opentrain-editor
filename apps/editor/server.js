@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import path from 'node:path';
-import crypto from 'node:crypto';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -92,7 +91,13 @@ async function docsvc(pathname, method = 'GET', body) {
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`docsvc ${method} ${pathname} -> ${resp.status}: ${resp.statusText || ''} ${text}`.trim());
+    const error = new Error(
+      `docsvc ${method} ${pathname} -> ${resp.status}: ${resp.statusText || ''} ${text}`.trim()
+    );
+    error.status = resp.status;
+    error.statusText = resp.statusText;
+    error.body = text;
+    throw error;
   }
   return await resp.json();
 }
@@ -122,28 +127,18 @@ async function ensureRootDoc(auth) {
   if (!scopeJobId || !canonicalId) {
     throw new Error('invalid_scope');
   }
-  const list = await docsvc(`/jobs/${encodeURIComponent(scopeJobId)}/docs`, 'GET');
-  let root = Array.isArray(list) && (
-    list.find((doc) => doc?.id === canonicalId) ||
-    list.find((doc) => {
-      if (!doc || !doc.id) return false;
-      const isTopLevel = doc.folderId == null;
-      if (!isTopLevel) return false;
-      const title = typeof doc.title === 'string' ? doc.title.trim() : '';
-      return title === 'Instructions' || title === 'Root';
-    })
-  );
-  if (root) {
-    return root;
+  try {
+    const existing = await docsvc(`/docs/${encodeURIComponent(canonicalId)}`, 'GET');
+    if (existing) {
+      return existing;
+    }
+  } catch (err) {
+    if (err.status && err.status !== 404) {
+      throw err;
+    }
   }
   const payload = { title: 'Instructions', jobId: scopeJobId, position: 0, htmlSnapshot: '<p></p>' };
-  try {
-    root = await docsvc(`/docs/${encodeURIComponent(canonicalId)}`, 'PUT', payload);
-  } catch (err) {
-    const fallbackId = `root-${scopeJobId}-${crypto.randomUUID().slice(0, 8)}`;
-    root = await docsvc(`/docs/${encodeURIComponent(fallbackId)}`, 'PUT', payload);
-  }
-  return root;
+  return docsvc(`/docs/${encodeURIComponent(canonicalId)}`, 'PUT', payload);
 }
 
 app.get('/api/docs/:id', verifyToken, async (req, res) => {
@@ -230,26 +225,38 @@ app.delete('/api/docs/:id', verifyToken, async (req, res) => {
 app.post('/api/scope/ensure-root', verifyToken, async (req, res) => {
   try {
     const scopeJobId = effectiveJobId(req.auth);
-    if (!scopeJobId) {
+    const rootId = canonicalRootId(req.auth);
+    if (!scopeJobId || !rootId) {
       return res.status(400).json({ error: 'invalid_scope' });
     }
     const root = await ensureRootDoc(req.auth);
-    res.json({ rootId: root.id });
+    res.json({ rootId: root?.id || rootId });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    res.status(502).json({ error: err.message || String(err) });
   }
 });
 
 app.get('/api/scope/docs', verifyToken, async (req, res) => {
   try {
     const scopeJobId = effectiveJobId(req.auth);
-    if (!scopeJobId) {
+    const rootId = canonicalRootId(req.auth);
+    if (!scopeJobId || !rootId) {
       return res.status(400).json({ error: 'invalid_scope' });
     }
-    const list = await docsvc(`/jobs/${encodeURIComponent(scopeJobId)}/docs`, 'GET');
-    res.json(Array.isArray(list) ? list : []);
+    const root = await ensureRootDoc(req.auth);
+    let docs;
+    try {
+      docs = await docsvc(`/jobs/${encodeURIComponent(scopeJobId)}/docs`, 'GET');
+    } catch (err) {
+      if (err.status === 404) {
+        docs = root ? [root] : [];
+      } else {
+        throw err;
+      }
+    }
+    res.json(Array.isArray(docs) ? docs : []);
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    res.status(502).json({ error: err.message || String(err) });
   }
 });
 
