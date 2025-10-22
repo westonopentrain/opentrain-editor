@@ -194,14 +194,19 @@
 
 .doc-action-rename,
 .doc-action-delete {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
 
 .doc-row:hover .doc-action-rename,
 .doc-row:hover .doc-action-delete,
 .doc-row:focus-within .doc-action-rename,
 .doc-row:focus-within .doc-action-delete {
-  display: inline-flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .doc-action-disabled {
