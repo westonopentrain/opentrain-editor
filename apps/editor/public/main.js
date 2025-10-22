@@ -346,7 +346,7 @@ const editor = new Editor({
 
 if (typeof window._openTrainWireEditor === 'function') {
   window._openTrainWireEditor(editor);
-  console.log('[OpenTrain] Bridge wired');
+  console.debug('[OpenTrain] Bridge wired');
 } else {
   console.warn('[OpenTrain] Bridge function not found on window');
 }
@@ -601,10 +601,10 @@ window.addEventListener('message', (event) => {
       } else if (msg.html) {
         editor.commands.setContent(msg.html, true);
       }
-      const from = msg.html ? 'html' : (msg.json ? 'json' : 'none');
+      const used = msg.html ? 'html' : (msg.json ? 'json' : 'none');
       const htmlLen = typeof msg.html === 'string' ? msg.html.length : 0;
-      console.debug('[OpenTrain child/main.js] content set', {
-        from,
+      console.debug('[OpenTrain child/main.js] ← parent: load', {
+        used,
         htmlLen,
       });
       break;
