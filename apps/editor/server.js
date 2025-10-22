@@ -275,11 +275,33 @@ app.post('/api/scope/pages', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'invalid_scope' });
     }
     const id = `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+    let position = 100;
+    try {
+      const docs = await docsvc(`/jobs/${encodeURIComponent(scopeJobId)}/docs`, 'GET');
+      const siblings = Array.isArray(docs)
+        ? docs.filter((doc) => (doc.folderId ?? null) === (rootId ?? null))
+        : [];
+      if (siblings.length) {
+        const max = Math.max(
+          ...siblings.map((doc) => {
+            const numeric = Number(doc?.position);
+            return Number.isFinite(numeric) ? numeric : 0;
+          })
+        );
+        position = max + 100;
+      }
+    } catch (err) {
+      if (!err.status || err.status !== 404) {
+        throw err;
+      }
+    }
+
     const payload = {
       title: trimmedTitle,
       jobId: scopeJobId,
       folderId: rootId,
-      position: Date.now(),
+      position,
       htmlSnapshot: '<p></p>',
     };
     const doc = await docsvc(`/docs/${encodeURIComponent(id)}`, 'PUT', payload);
