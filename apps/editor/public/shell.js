@@ -22,6 +22,10 @@ function decodeJwtPayload(t) {
 const claims = decodeJwtPayload(token);
 const readOnly = String(claims?.perms || '') === 'ro';
 let currentDocId = claims.docId || null;
+const canonicalRootCandidate = claims.folderId
+  ? `instructions-folder-${claims.folderId}`
+  : (claims.jobId ? `instructions-${claims.jobId}` : null);
+let rootId = null;
 let docs = [];
 const docMap = new Map();
 const dragState = { id: null, before: false };
@@ -254,13 +258,14 @@ function createRow(doc, level) {
   row.className = 'doc-row';
   row.dataset.id = doc.id;
   row.dataset.level = String(level);
+  const isRootDoc = Boolean(rootId) && doc.id === rootId;
   if (level === 0) {
     row.classList.add('doc-row-root');
   } else {
     row.classList.add('doc-row-child');
   }
 
-  if (!readOnly) {
+  if (!readOnly && !isRootDoc) {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
@@ -269,7 +274,7 @@ function createRow(doc, level) {
     row.addEventListener('drop', handleDrop);
   }
 
-  if (!readOnly) {
+  if (!readOnly && !isRootDoc) {
     const handle = document.createElement('span');
     handle.className = 'doc-handle';
     handle.textContent = '⋮⋮';
@@ -332,14 +337,21 @@ function createRow(doc, level) {
     deleteBtn.type = 'button';
     deleteBtn.className = 'doc-action doc-action-delete';
     deleteBtn.draggable = false;
-    deleteBtn.title = 'Delete page';
-    deleteBtn.setAttribute('aria-label', 'Delete page');
     deleteBtn.textContent = '🗑';
-    deleteBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      event.preventDefault();
-      deleteDoc(doc.id);
-    });
+    if (isRootDoc) {
+      deleteBtn.disabled = true;
+      deleteBtn.title = 'Root instructions cannot be deleted';
+      deleteBtn.setAttribute('aria-disabled', 'true');
+      deleteBtn.classList.add('doc-action-disabled');
+    } else {
+      deleteBtn.title = 'Delete page';
+      deleteBtn.setAttribute('aria-label', 'Delete page');
+      deleteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        deleteDoc(doc.id);
+      });
+    }
     actions.appendChild(deleteBtn);
 
     row.appendChild(actions);
@@ -359,20 +371,100 @@ function parseListResponse(payload) {
   return [];
 }
 
-async function loadDocList() {
-  const jobId = claims.jobId;
-  if (!jobId) {
-    renderList([]);
-    return;
+async function ensureRoot() {
+  if (rootId) {
+    return rootId;
   }
+  const resp = await fetch('/api/scope/ensure-root', {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(payload?.error || 'ensure-root failed');
+  }
+  if (payload && payload.rootId) {
+    rootId = payload.rootId;
+  }
+  return rootId;
+}
+
+function collectDocsUnderRoot(arr) {
+  if (!Array.isArray(arr)) return [];
+  const byId = new Map();
+  arr.forEach((doc) => {
+    if (doc && doc.id) {
+      byId.set(doc.id, doc);
+    }
+  });
+
+  if (!rootId) {
+    if (canonicalRootCandidate && byId.has(canonicalRootCandidate)) {
+      rootId = canonicalRootCandidate;
+    } else {
+      let fallbackRoot = arr.find((doc) => {
+        if (!doc || !doc.id) return false;
+        const isTopLevel = (doc.folderId ?? null) === null;
+        if (!isTopLevel) return false;
+        const title = typeof doc.title === 'string' ? doc.title.trim() : '';
+        return title === 'Instructions' || title === 'Root';
+      });
+      if (!fallbackRoot) {
+        fallbackRoot = arr.find((doc) => doc && doc.id && (doc.folderId ?? null) === null);
+      }
+      if (fallbackRoot) {
+        rootId = fallbackRoot.id;
+      }
+    }
+  } else if (canonicalRootCandidate && byId.has(canonicalRootCandidate) && rootId !== canonicalRootCandidate) {
+    rootId = canonicalRootCandidate;
+  } else if (!byId.has(rootId)) {
+    rootId = null;
+  }
+
+  if (!rootId || !byId.has(rootId)) {
+    return arr.filter((doc) => doc && doc.id);
+  }
+
+  const allowed = new Set([rootId]);
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop();
+    arr.forEach((doc) => {
+      if (!doc || !doc.id) return;
+      const folderId = typeof doc.folderId === 'string' ? doc.folderId : null;
+      if (folderId === current && !allowed.has(doc.id)) {
+        allowed.add(doc.id);
+        stack.push(doc.id);
+      }
+    });
+  }
+
+  const filtered = arr.filter((doc) => doc && doc.id && allowed.has(doc.id));
+  filtered.sort((a, b) => {
+    if (!a || !b) return 0;
+    if (a.id === rootId && b.id !== rootId) return -1;
+    if (b.id === rootId && a.id !== rootId) return 1;
+    const posA = Number.isFinite(Number(a.position)) ? Number(a.position) : 0;
+    const posB = Number.isFinite(Number(b.position)) ? Number(b.position) : 0;
+    if (posA !== posB) return posA - posB;
+    const titleA = typeof a.title === 'string' ? a.title : '';
+    const titleB = typeof b.title === 'string' ? b.title : '';
+    return titleA.localeCompare(titleB);
+  });
+  return filtered;
+}
+
+async function loadDocList() {
   try {
-    const resp = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/docs`, { headers: authHeaders() });
+    const resp = await fetch('/api/scope/docs', { headers: authHeaders() });
     if (!resp.ok) {
       throw new Error('Failed to list docs');
     }
     const payload = await resp.json().catch(() => []);
     const arr = parseListResponse(payload);
-    renderList(arr);
+    const scoped = collectDocsUnderRoot(arr);
+    renderList(scoped);
   } catch (err) {
     console.warn('Doc list failed', err);
     renderList([]);
@@ -436,45 +528,70 @@ function createDocId() {
   return `doc-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-async function ensureDefaultDoc() {
-  if (readOnly) return null;
-  if (docs.length > 0) return null;
-  const id = createDocId();
-  const payload = {
-    title: 'New document',
-    position: computeNextPosition(null),
-    htmlSnapshot: '<p></p>',
-  };
-  try {
-    await persistDoc(id, payload);
-    currentDocId = id;
-    renderList();
-    return id;
-  } catch (err) {
-    console.error('Failed to create default page', err);
-    setStatus('Failed to create default page');
-    return null;
-  }
-}
-
 async function addPage(parentId = null) {
   if (readOnly) return;
-  if (parentId) {
+
+  const isTopLevel = !parentId;
+  let targetParentId = parentId;
+
+  if (isTopLevel) {
+    try {
+      await ensureRoot();
+    } catch (err) {
+      console.error('Failed to ensure root page', err);
+      window.alert('Unable to prepare instructions root. Please try again.');
+      return;
+    }
+    if (!rootId) {
+      window.alert('Unable to determine root page.');
+      return;
+    }
+    targetParentId = rootId;
+  } else {
     const parent = docMap.get(parentId);
     if (!parent || (parent.folderId && parent.folderId !== null)) {
       window.alert('Subpages can only be added to main pages.');
       return;
     }
   }
+
   const defaultTitle = parentId ? 'New subpage' : 'New page';
   const input = window.prompt('Page title', defaultTitle);
   if (input === null) return;
   const title = input.trim() || defaultTitle;
+
+  if (isTopLevel) {
+    try {
+      const resp = await fetch('/api/scope/pages', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ title, rootId }),
+      });
+      if (!resp.ok) {
+        const msg = await resp.text().catch(() => '');
+        throw new Error(msg || 'Failed to create page');
+      }
+      const created = await resp.json().catch(() => null);
+      if (created && created.id) {
+        mergeDoc(created);
+        currentDocId = created.id;
+        renderList();
+        await openDoc(created.id);
+      } else {
+        await loadDocList();
+      }
+    } catch (err) {
+      console.error('Failed to create page', err);
+      window.alert('Failed to create page. Please try again.');
+    }
+    return;
+  }
+
   const id = createDocId();
-  const position = computeNextPosition(parentId);
+  const position = computeNextPosition(targetParentId);
   const payload = { title, position };
-  if (parentId) {
-    payload.folderId = parentId;
+  if (targetParentId) {
+    payload.folderId = targetParentId;
   }
   try {
     await persistDoc(id, payload);
@@ -491,6 +608,10 @@ async function deleteDoc(id) {
   if (readOnly) return;
   const doc = docMap.get(id);
   if (!doc) return;
+  if (rootId && id === rootId) {
+    window.alert('Root instructions cannot be deleted.');
+    return;
+  }
   const descendantIds = collectDescendantIds(id);
   const hasChildren = Array.from(descendantIds).some((docId) => docId !== id);
   const message = hasChildren
@@ -691,6 +812,9 @@ function handleListDragOver(event) {
   const level = Number(event.currentTarget.dataset.level || '0');
   if (Number.isFinite(level) && level >= 2) return;
   const folderId = event.currentTarget.dataset.folderId || null;
+  if (!folderId && rootId && dragState.id !== rootId) {
+    return;
+  }
   if (folderId) {
     if (folderId === dragState.id) return;
     const folderDoc = docMap.get(folderId);
@@ -715,6 +839,10 @@ async function handleListDrop(event) {
   const level = Number(event.currentTarget.dataset.level || '0');
   if (Number.isFinite(level) && level >= 2) return;
   const folderId = event.currentTarget.dataset.folderId || null;
+  if (!folderId && rootId && dragState.id !== rootId) {
+    event.currentTarget.classList.remove('drop-target');
+    return;
+  }
   if (folderId) {
     if (folderId === dragState.id) {
       event.currentTarget.classList.remove('drop-target');
@@ -849,17 +977,23 @@ async function openDoc(docId) {
 
 window.__editorShell = {
   async initAndLoad() {
-    await loadDocList();
-    if (!currentDocId) {
-      const first = getChildren(null)[0];
-      if (first) {
-        currentDocId = first.id;
+    if (claims.perms === 'rw') {
+      try {
+        await ensureRoot();
+      } catch (err) {
+        console.error('Failed to ensure instructions root', err);
+        setStatus('Unable to prepare instructions root');
       }
     }
-    if (!currentDocId && !readOnly) {
-      const created = await ensureDefaultDoc();
-      if (created) {
-        currentDocId = created;
+    await loadDocList();
+    if (!currentDocId) {
+      if (rootId && docMap.has(rootId)) {
+        currentDocId = rootId;
+      } else {
+        const first = getChildren(null)[0];
+        if (first) {
+          currentDocId = first.id;
+        }
       }
     }
     if (!currentDocId) {
@@ -880,8 +1014,7 @@ window.__editorShell = {
 
 if ($addPage) {
   if (readOnly) {
-    $addPage.disabled = true;
-    $addPage.title = 'Read-only mode';
+    $addPage.style.display = 'none';
   } else {
     $addPage.addEventListener('click', () => addPage());
   }

@@ -12,37 +12,35 @@
 
 #sidebar header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.sidebar-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sidebar-heading strong {
+#sidebar header strong {
   font-size: 15px;
   color: #111827;
 }
 
+.sidebar-spacer {
+  flex: 1;
+}
+
 #add-page {
-  padding: 4px 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #e5e7eb;
   background: #f9fafb;
-  color: #111827;
+  padding: 2px 8px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 16px;
+  line-height: 1;
+  color: #111827;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 #add-page:hover {
-  background: #edeff3;
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 #add-page:focus-visible {
@@ -50,11 +48,8 @@
   outline-offset: 2px;
 }
 
-#add-page:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  background: #f3f4f6;
-  color: #9ca3af;
+#add-page[style*='display: none'] {
+  display: none !important;
 }
 
 #doc-list {
@@ -195,6 +190,12 @@
 .doc-action-delete:hover {
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.14);
+}
+
+.doc-action-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .doc-children {
