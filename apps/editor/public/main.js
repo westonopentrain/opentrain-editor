@@ -333,6 +333,8 @@ const editor = new Editor({
   },
 });
 
+window._openTrainWireEditor(editor);
+
 function debounce(fn, delay) {
   let timer = null;
   return (...args) => {

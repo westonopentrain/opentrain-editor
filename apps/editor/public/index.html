@@ -70,6 +70,50 @@
     <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
       <use href="icons.svg#icon-bold"></use>
     </svg>
+    <script>
+      // Bubble <-> iframe bridge.
+      // Call window._openTrainWireEditor(editor) right after you create the Tiptap editor.
+
+      window._openTrainWireEditor = function (editor) {
+        // 1) Tell Bubble "I'm ready"
+        try {
+          window.parent && window.parent.postMessage({ type: 'ready' }, '*');
+        } catch (e) {}
+
+        // 2) On every edit, send HTML + JSON up to Bubble
+        editor.on('update', ({ editor }) => {
+          try {
+            window.parent.postMessage(
+              { type: 'change', html: editor.getHTML(), json: editor.getJSON() },
+              '*'
+            );
+          } catch (e) {}
+        });
+
+        // 3) Listen for commands from Bubble (load content, insert image, set read-only)
+        window.addEventListener('message', (e) => {
+          const msg = (e && e.data) || {};
+          if (msg.type === 'load') {
+            if (msg.html) {
+              // Tiptap can accept HTML strings
+              editor.commands.setContent(msg.html);
+            } else if (msg.json) {
+              // Or TipTap JSON
+              editor.commands.setContent(msg.json);
+            }
+            return;
+          }
+          if (msg.type === 'insertImage' && msg.src) {
+            editor.chain().focus().setImage({ src: msg.src }).run();
+            return;
+          }
+          if (msg.type === 'setReadOnly') {
+            editor.setEditable(!msg.value);
+            return;
+          }
+        });
+      };
+    </script>
     <script type="module" src="main.js"></script>
   </body>
 </html>
