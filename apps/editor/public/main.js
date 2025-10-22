@@ -122,7 +122,9 @@ const SlashCommand = Extension.create({
                 menu.append(button);
               });
               document.body.append(menu);
-              const { left, top } = props.clientRect();
+              const rect = props.clientRect && props.clientRect();
+              const left = rect ? rect.left : 0;
+              const top = rect ? rect.top : 0;
               Object.assign(menu.style, {
                 position: 'absolute',
                 left: `${left}px`,
@@ -143,8 +145,11 @@ const SlashCommand = Extension.create({
                 });
                 menu.append(button);
               });
-              const { left, top } = props.clientRect();
+              const rect = props.clientRect && props.clientRect();
+              const left = rect ? rect.left : 0;
+              const top = rect ? rect.top : 0;
               Object.assign(menu.style, {
+                position: 'absolute',
                 left: `${left}px`,
                 top: `${top + 20}px`,
               });
@@ -165,7 +170,9 @@ const SlashCommand = Extension.create({
     };
   },
   addProseMirrorPlugins() {
-    return [Suggestion(this.options.suggestion)];
+    return [
+      Suggestion({ editor: this.editor, ...this.options.suggestion }),
+    ];
   },
 });
 
@@ -283,6 +290,10 @@ const editor = new Editor({
       history: true,
       dropcursor: false,
       gapcursor: false,
+      // ⬇️ prevent duplicates (we include explicit variants below)
+      horizontalRule: false,
+      hardBreak: false,
+      codeBlock: false,
     }),
     Placeholder.configure({ placeholder: 'Write something brilliant…' }),
     CharacterCount.configure({ limit: 10000 }),
@@ -311,13 +322,13 @@ const editor = new Editor({
     HorizontalRule,
     HardBreak,
     CodeBlockLowlight.configure({ lowlight }),
-    mentionExtension,
+    // mentionExtension,        // ← temporarily disabled
     BubbleMenu.configure({ element: bubbleMenuElement }),
     FloatingMenu.configure({ element: floatingMenuElement }),
-    SlashCommand,
+    // SlashCommand,            // ← temporarily disabled
     UniqueId,
   ],
-  content: '<p>Welcome to the OpenTrain editor.</p>',
+  content: '',
   onCreate() {
     postReady();
     updateToolbarState();
@@ -351,6 +362,9 @@ function debounce(fn, delay) {
 const postChange = () => {
   const json = editor.getJSON();
   const html = editor.getHTML();
+  console.debug('[OpenTrain child/main.js] → parent: change', {
+    htmlLen: html.length,
+  });
   window.parent?.postMessage({ type: 'change', json, html }, '*'); // TODO: restrict origin to Bubble domains.
 };
 
@@ -574,6 +588,7 @@ editorElement.addEventListener('drop', handlePasteOrDrop);
 
 window.addEventListener('message', (event) => {
   const msg = event.data || {};
+  console.debug('[OpenTrain child/main.js] ← parent:', msg);
   if (!msg || typeof msg !== 'object') return;
 
   switch (msg.type) {
@@ -586,6 +601,12 @@ window.addEventListener('message', (event) => {
       } else if (msg.html) {
         editor.commands.setContent(msg.html, true);
       }
+      const from = msg.html ? 'html' : (msg.json ? 'json' : 'none');
+      const htmlLen = typeof msg.html === 'string' ? msg.html.length : 0;
+      console.debug('[OpenTrain child/main.js] content set', {
+        from,
+        htmlLen,
+      });
       break;
     }
     case 'insertImage':
