@@ -328,7 +328,7 @@ const editor = new Editor({
     // SlashCommand,            // ← temporarily disabled
     UniqueId,
   ],
-  content: '',
+  content: '<p></p>',
   onCreate() {
     postReady();
     updateToolbarState();
@@ -346,9 +346,9 @@ const editor = new Editor({
 
 if (typeof window._openTrainWireEditor === 'function') {
   window._openTrainWireEditor(editor);
-  console.debug('[OpenTrain] Bridge wired');
+  console.debug('[OpenTrain child/main] bridge wired');
 } else {
-  console.warn('[OpenTrain] Bridge function not found on window');
+  console.warn('[OpenTrain child/main] bridge function not found on window');
 }
 
 function debounce(fn, delay) {
@@ -362,13 +362,12 @@ function debounce(fn, delay) {
 const postChange = () => {
   const json = editor.getJSON();
   const html = editor.getHTML();
-  console.debug('[OpenTrain child/main.js] → parent: change', {
-    htmlLen: html.length,
-  });
+  console.debug('[OpenTrain child/main] → parent: change', { htmlLen: html.length });
   window.parent?.postMessage({ type: 'change', json, html }, '*'); // TODO: restrict origin to Bubble domains.
 };
 
 const postReady = () => {
+  console.debug('[OpenTrain child/main] → parent: ready');
   window.parent?.postMessage({ type: 'ready' }, '*');
 };
 
