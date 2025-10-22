@@ -19,6 +19,7 @@ function decodeJwtPayload(t) {
 }
 
 const claims = decodeJwtPayload(token);
+const readOnly = String(claims?.perms || '') === 'ro';
 let currentDocId = claims.docId || null;
 
 function getEditor() {
@@ -121,9 +122,10 @@ async function openDoc(docId) {
   const html = (doc && doc.htmlSnapshot) || '<p></p>';
   const editor = getEditor();
   editor.commands.setContent(html, true);
+  try { editor.setEditable(!readOnly); } catch {}
   lastSavedHash = hashString(editor.getHTML());
   editorReady = true;
-  setStatus('Saved');
+  setStatus(readOnly ? 'Read‑only' : 'Saved');
 }
 
 function setStatus(text) {
@@ -131,7 +133,7 @@ function setStatus(text) {
 }
 
 function queueSave() {
-  if (saving) return;
+  if (saving || readOnly) return;
   if (saveTimer) {
     clearTimeout(saveTimer);
   }
@@ -143,7 +145,7 @@ function queueSave() {
 }
 
 async function doSave() {
-  if (!editorReady || !currentDocId) return;
+  if (!editorReady || !currentDocId || readOnly) return;
   const editor = getEditor();
   const html = editor.getHTML();
   const hash = hashString(html);
