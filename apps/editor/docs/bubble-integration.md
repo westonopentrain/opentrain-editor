@@ -12,7 +12,7 @@ This guide walks through embedding the Render-hosted editor inside Bubble using 
 
 Add the following properties (all text unless noted):
 
-- `editor_url` (Text) — the Render deployment URL, e.g. `https://opentrain-editor.onrender.com`.
+- `editor_url` (Text) — the Render deployment URL, e.g. `https://opentrain-editor-shell.onrender.com`.
 - `docId` (Text) — optional identifier passed to the iframe query string.
 - `initial_json` (Long text) — serialized Tiptap JSON string.
 - `initial_html` (Long text) — HTML fallback when JSON is absent.
