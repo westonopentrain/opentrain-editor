@@ -11,10 +11,13 @@
   <div id="app">
     <aside id="sidebar">
       <header>
-        <strong>Pages</strong>
-        <div id="save-status" aria-live="polite">—</div>
+        <div class="sidebar-heading">
+          <strong>Pages</strong>
+          <div id="save-status" aria-live="polite">—</div>
+        </div>
+        <button type="button" id="add-page">New page</button>
       </header>
-      <nav id="doc-list" role="listbox" aria-label="Pages"></nav>
+      <nav id="doc-list" aria-label="Pages"></nav>
     </aside>
     <main id="workspace">
       <header class="toolbar" role="toolbar" aria-label="Editor toolbar">
