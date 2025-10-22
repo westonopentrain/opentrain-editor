@@ -341,8 +341,19 @@ const editor = new Editor({
   onUpdate() {
     try { updateCharacterCount(); } catch (e) {}
     debouncedChange();
+    if (window.__editorShell && typeof window.__editorShell.onEditorUpdate === 'function') {
+      window.__editorShell.onEditorUpdate();
+    }
   },
 });
+
+window.editor = editor;
+
+if (window.__editorShell && typeof window.__editorShell.initAndLoad === 'function') {
+  Promise.resolve()
+    .then(() => window.__editorShell.initAndLoad())
+    .catch((err) => console.error('Editor shell init failed', err));
+}
 
 if (typeof window._openTrainWireEditor === 'function') {
   window._openTrainWireEditor(editor);
