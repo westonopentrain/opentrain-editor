@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(cors());
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
-const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://*.opentrain.ai;';
+const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://www.opentrain.ai;';
 
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', FRAME_ANCESTORS);
@@ -41,11 +41,17 @@ app.post('/api/issue-embed-token', (req, res) => {
   if (!EMBED_ISSUER_SECRET || req.get('X-Partner-Secret') !== EMBED_ISSUER_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  const { userId, jobId, docId, ttlSec } = req.body || {};
+  const { userId, jobId, docId, perms, ttlSec } = req.body || {};
   if (!jobId) {
     return res.status(400).json({ error: 'jobId required' });
   }
-  const token = signToken({ userId, jobId, docId, ttlSec: ttlSec || 300 });
+  const token = signToken({
+    userId,
+    jobId,
+    docId,
+    perms: perms === 'ro' ? 'ro' : 'rw',
+    ttlSec: ttlSec || 300
+  });
   res.json({ token });
 });
 
@@ -96,6 +102,9 @@ app.get('/api/docs/:id', verifyToken, async (req, res) => {
 });
 
 app.put('/api/docs/:id', verifyToken, async (req, res) => {
+  if (req.auth?.perms !== 'rw') {
+    return res.status(403).json({ error: 'read_only' });
+  }
   try {
     const { id } = req.params;
     const payload = { ...req.body, jobId: req.auth.jobId };
