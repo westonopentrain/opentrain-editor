@@ -1,19 +1,24 @@
 services:
-  # 1) Static editor from apps/editor
+  # 1) Editor shell from apps/editor
   - type: web
     name: opentrain-editor
-    runtime: static
+    runtime: node
     rootDir: apps/editor
-    buildCommand: ""
-    staticPublishPath: public
+    plan: starter
+    buildCommand: "npm install"
+    startCommand: "npm start"
     autoDeploy: true
-    headers:
-      - path: /*
-        name: Content-Security-Policy
-        value: frame-ancestors https://*.bubbleapps.io https://*.opentrain.ai;
-      - path: /index.html
-        name: Cache-Control
-        value: no-store
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DOCSVC_URL
+        value: https://opentrain-docsvc.onrender.com
+      - key: DOCSVC_API_KEY
+        sync: false
+      - key: EMBED_ISSUER_SECRET
+        sync: false
+      - key: EMBED_JWT_SECRET
+        sync: false
     buildFilter:
       paths:
         - apps/editor/**

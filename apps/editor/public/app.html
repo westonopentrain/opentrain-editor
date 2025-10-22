@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenTrain Editor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="shell.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <header>
+        <strong>Pages</strong>
+        <div id="save-status" aria-live="polite">—</div>
+      </header>
+      <nav id="doc-list" role="listbox" aria-label="Pages"></nav>
+    </aside>
+    <main id="workspace">
+      <header class="toolbar" role="toolbar" aria-label="Editor toolbar">
+        <div class="toolbar-group">
+          <button data-command="toggleBold" aria-label="Bold"><svg><use href="#icon-bold" /></svg></button>
+          <button data-command="toggleItalic" aria-label="Italic"><svg><use href="#icon-italic" /></svg></button>
+          <button data-command="toggleUnderline" aria-label="Underline"><svg><use href="#icon-underline" /></svg></button>
+          <button data-command="toggleStrike" aria-label="Strikethrough"><svg><use href="#icon-strike" /></svg></button>
+          <button data-command="toggleCode" aria-label="Inline code"><svg><use href="#icon-code" /></svg></button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="setHeading" data-level="1" aria-label="Heading 1">H1</button>
+          <button data-command="setHeading" data-level="2" aria-label="Heading 2">H2</button>
+          <button data-command="setHeading" data-level="3" aria-label="Heading 3">H3</button>
+          <button data-command="setHeading" data-level="4" aria-label="Heading 4">H4</button>
+          <button data-command="setHeading" data-level="5" aria-label="Heading 5">H5</button>
+          <button data-command="setHeading" data-level="6" aria-label="Heading 6">H6</button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="setTextAlign" data-align="left" aria-label="Align left"><svg><use href="#icon-align-left" /></svg></button>
+          <button data-command="setTextAlign" data-align="center" aria-label="Align center"><svg><use href="#icon-align-center" /></svg></button>
+          <button data-command="setTextAlign" data-align="right" aria-label="Align right"><svg><use href="#icon-align-right" /></svg></button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="toggleBulletList" aria-label="Bullet list"><svg><use href="#icon-bullet-list" /></svg></button>
+          <button data-command="toggleOrderedList" aria-label="Ordered list"><svg><use href="#icon-ordered-list" /></svg></button>
+          <button data-command="toggleTaskList" aria-label="Task list"><svg><use href="#icon-task-list" /></svg></button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="toggleBlockquote" aria-label="Blockquote"><svg><use href="#icon-quote" /></svg></button>
+          <button data-command="setHorizontalRule" aria-label="Horizontal rule"><svg><use href="#icon-hr" /></svg></button>
+          <button data-command="toggleLink" aria-label="Set link"><svg><use href="#icon-link" /></svg></button>
+          <button data-command="unsetLink" aria-label="Unset link"><svg><use href="#icon-unlink" /></svg></button>
+          <button data-command="insertImage" aria-label="Insert image"><svg><use href="#icon-image" /></svg></button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="insertTable" aria-label="Insert table"><svg><use href="#icon-table" /></svg></button>
+          <button data-command="addColumnBefore" aria-label="Add column before"><svg><use href="#icon-column-before" /></svg></button>
+          <button data-command="addColumnAfter" aria-label="Add column after"><svg><use href="#icon-column-after" /></svg></button>
+          <button data-command="deleteColumn" aria-label="Delete column"><svg><use href="#icon-column-delete" /></svg></button>
+          <button data-command="addRowBefore" aria-label="Add row before"><svg><use href="#icon-row-before" /></svg></button>
+          <button data-command="addRowAfter" aria-label="Add row after"><svg><use href="#icon-row-after" /></svg></button>
+          <button data-command="deleteRow" aria-label="Delete row"><svg><use href="#icon-row-delete" /></svg></button>
+          <button data-command="deleteTable" aria-label="Delete table"><svg><use href="#icon-table-delete" /></svg></button>
+        </div>
+        <div class="toolbar-group">
+          <button data-command="undo" aria-label="Undo"><svg><use href="#icon-undo" /></svg></button>
+          <button data-command="redo" aria-label="Redo"><svg><use href="#icon-redo" /></svg></button>
+        </div>
+        <div class="toolbar-group toolbar-count" aria-live="polite">
+          <span id="character-count">0 characters</span>
+        </div>
+      </header>
+
+      <div id="editor" aria-label="Document editor" role="textbox" aria-multiline="true"></div>
+      <input type="file" id="image-input" accept="image/*" hidden />
+    </main>
+  </div>
+
+  <div id="menus"></div>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <use href="icons.svg#icon-bold"></use>
+  </svg>
+
+  <script type="module" src="shell.js"></script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
