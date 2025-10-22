@@ -71,53 +71,35 @@
       <use href="icons.svg#icon-bold"></use>
     </svg>
     <script>
-      // Bubble <-> iframe bridge.
-      // Call window._openTrainWireEditor(editor) right after you create the Tiptap editor.
-
+      // Bubble <-> iframe bridge. The editor itself is created in main.js.
       window._openTrainWireEditor = function (editor) {
-        // 1) Tell Bubble "I'm ready"
-        try {
-          window.parent && window.parent.postMessage({ type: 'ready' }, '*');
-          console.debug('[OpenTrain child] → parent: ready');
-        } catch (e) {}
-
-        // 2) On every edit, send HTML + JSON up to Bubble
-        editor.on('update', ({ editor }) => {
-          try {
-            const html = editor.getHTML();
-            const _htmlLen = html.length;
-            console.debug('[OpenTrain child] → parent: change', { htmlLen: _htmlLen });
-            window.parent.postMessage(
-              { type: 'change', html, json: editor.getJSON() },
-              '*'
-            );
-          } catch (e) {}
-        });
-
-        // 3) Listen for commands from Bubble (load content, insert image, set read-only)
+        // NOTE: "ready" and "change" are posted by main.js only (debounced).
+        // This bridge only handles commands coming *from* Bubble.
         window.addEventListener('message', (e) => {
           const msg = (e && e.data) || {};
-          console.debug('[OpenTrain child] ← parent:', msg);
-          if (msg.type === 'load') {
-            if (msg.html) {
-              // Tiptap can accept HTML strings
-              editor.commands.setContent(msg.html);
-            } else if (msg.json) {
-              // Or TipTap JSON
-              editor.commands.setContent(msg.json);
-            }
-            const htmlLen = typeof msg.html === 'string' ? msg.html.length : 0;
-            console.debug('[OpenTrain child] content set from parent', {
-              used: msg.html ? 'html' : (msg.json ? 'json' : 'none'),
-              htmlLen,
+          try {
+            console.debug('[OpenTrain child/index] ← parent:', {
+              type: msg && msg.type,
+              hasHtml: typeof msg.html === 'string' && msg.html.length > 0,
+              hasJson: !!msg.json
             });
+          } catch (_) {}
+
+          if (msg && msg.type === 'load') {
+            if (typeof msg.html === 'string') {
+              editor.commands.setContent(msg.html);              // load HTML
+            } else if (msg.json) {
+              editor.commands.setContent(msg.json);              // or JSON
+            }
             return;
           }
-          if (msg.type === 'insertImage' && msg.src) {
+
+          if (msg && msg.type === 'insertImage' && msg.src) {
             editor.chain().focus().setImage({ src: msg.src }).run();
             return;
           }
-          if (msg.type === 'setReadOnly') {
+
+          if (msg && msg.type === 'setReadOnly') {
             editor.setEditable(!msg.value);
             return;
           }
