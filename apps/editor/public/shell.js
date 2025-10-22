@@ -305,7 +305,7 @@ function createRow(doc, level) {
 
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
-    renameBtn.className = 'doc-action';
+    renameBtn.className = 'doc-action doc-action-rename';
     renameBtn.draggable = false;
     renameBtn.title = 'Rename page';
     renameBtn.setAttribute('aria-label', 'Rename page');
