@@ -1,7 +1,7 @@
 services:
   # 1) Editor shell from apps/editor
   - type: web
-    name: opentrain-editor
+    name: opentrain-editor-shell
     runtime: node
     rootDir: apps/editor
     plan: starter
@@ -38,7 +38,7 @@ services:
       - key: DOCSVC_API_KEY
         generateValue: true
       - key: ALLOWED_ORIGINS
-        value: https://*.bubbleapps.io,https://opentrain-editor.onrender.com
+        value: https://*.bubbleapps.io,https://opentrain-editor-shell.onrender.com
     buildFilter:
       paths:
         - apps/docsvc/**

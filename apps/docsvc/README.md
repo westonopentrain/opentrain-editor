@@ -49,7 +49,7 @@ curl -X POST http://localhost:3001/docs/migrate/editorjs \
 ## Authentication and CORS
 
 - `/docs/*` routes require a bearer token: include `Authorization: Bearer ${DOCSVC_API_KEY}` in every request. `/health` remains public for uptime checks.
-- `ALLOWED_ORIGINS` controls which browser origins Fastify will accept. Provide a comma-separated list (e.g. `https://*.bubbleapps.io,https://opentrain-editor.onrender.com`). When empty, any origin is accepted (useful for local development).
+- `ALLOWED_ORIGINS` controls which browser origins Fastify will accept. Provide a comma-separated list (e.g. `https://*.bubbleapps.io,https://opentrain-editor-shell.onrender.com`). When empty, any origin is accepted (useful for local development).
 
 ## Shared Utilities
 
