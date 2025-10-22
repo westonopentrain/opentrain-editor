@@ -111,21 +111,36 @@ window.__editorShell = {
 
 async function openDoc(docId) {
   currentDocId = docId;
-  Array.from($list.children).forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.id === docId);
-  });
-  const resp = await fetch(`/api/docs/${encodeURIComponent(docId)}`, { headers: authHeaders() });
-  if (!resp.ok) {
-    throw new Error(await resp.text());
+  Array.from($list.children).forEach(b =>
+    b.classList.toggle('active', b.dataset.id === docId)
+  );
+
+  let html = '<p></p>'; // default for brand-new docs
+
+  try {
+    const r = await fetch(`/api/docs/${encodeURIComponent(docId)}`, { headers: authHeaders() });
+
+   if (r.status === 404) {
+     // New document: start with empty content; autosave will create it
+     setStatus('New doc — start typing');
+   } else if (!r.ok) {
+     const msg = await r.text().catch(() => '');
+     console.error('Failed to load doc', r.status, msg);
+     setStatus('Failed to load doc'); // keep editor usable anyway
+   } else {
+     const doc = await r.json().catch(() => null);
+     if (doc && doc.htmlSnapshot) html = doc.htmlSnapshot;
+     setStatus('Saved');
+   }
+  } catch (e) {
+    console.error('Open doc error', e);
+    setStatus('Ready');
   }
-  const doc = await resp.json();
-  const html = (doc && doc.htmlSnapshot) || '<p></p>';
-  const editor = getEditor();
+
+  // Always make the editor usable and enable autosave
   editor.commands.setContent(html, true);
-  try { editor.setEditable(!readOnly); } catch {}
   lastSavedHash = hashString(editor.getHTML());
   editorReady = true;
-  setStatus(readOnly ? 'Read‑only' : 'Saved');
 }
 
 function setStatus(text) {
