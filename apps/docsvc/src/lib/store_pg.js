@@ -56,3 +56,13 @@ export async function listDocsByJob(jobId) {
   );
   return rows.map(mapRow);
 }
+
+export async function deleteDocCascade(id) {
+  const childResult = await query('delete from docs where folder_id = $1 returning id', [id]);
+  const childIds = childResult.rows?.map((row) => row.id) ?? [];
+  const mainResult = await query('delete from docs where id = $1 returning id', [id]);
+  const mainIds = mainResult.rows?.map((row) => row.id) ?? [];
+  const ordered = [...mainIds, ...childIds];
+  const deletedIds = Array.from(new Set(ordered));
+  return { deletedIds };
+}

@@ -95,6 +95,14 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+.doc-row.doc-row-child {
+  margin-left: 18px;
+}
+
+.doc-row.doc-row-root {
+  margin-left: 0;
+}
+
 .doc-row:hover {
   background: #f3f4f6;
 }
@@ -180,13 +188,22 @@
   outline-offset: 1px;
 }
 
+.doc-action-delete {
+  color: #ef4444;
+}
+
+.doc-action-delete:hover {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.14);
+}
+
 .doc-children {
-  margin-left: 16px;
-  padding-left: 10px;
-  border-left: 1px solid #e5e7eb;
+  margin-left: 24px;
+  padding-left: 16px;
+  border-left: 2px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-height: 8px;
 }
 

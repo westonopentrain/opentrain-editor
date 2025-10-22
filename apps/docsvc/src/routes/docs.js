@@ -1,4 +1,4 @@
-import { getDoc, upsertDoc, listDocsByJob } from '../lib/store_pg.js';
+import { getDoc, upsertDoc, listDocsByJob, deleteDocCascade } from '../lib/store_pg.js';
 import { edjsToHtml, edjsToTiptap } from '../lib/converters.js';
 import { asString, isTiptapDoc } from '../lib/validate.js';
 
@@ -65,6 +65,16 @@ export async function docsRoutes(app) {
 
     const saved = await upsertDoc(id, payload);
     return reply.code(200).send(saved);
+  });
+
+  // DELETE /docs/:id
+  app.delete('/:id', async (request, reply) => {
+    const { id } = request.params;
+    const result = await deleteDocCascade(id);
+    if (!result.deletedIds.includes(id)) {
+      return reply.code(404).send({ error: 'Not found' });
+    }
+    return reply.code(200).send(result);
   });
 
   // POST /docs/migrate/editorjs

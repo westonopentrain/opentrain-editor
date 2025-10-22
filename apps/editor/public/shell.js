@@ -49,11 +49,56 @@ function normalizeDoc(input, fallbackIndex = 0) {
 
 function rebuildDocMap() {
   docMap.clear();
+  const byId = new Map();
   docs.forEach((doc, index) => {
     doc.folderId = typeof doc.folderId === 'string' && doc.folderId.trim() ? doc.folderId : null;
     doc.position = Number.isFinite(Number(doc.position)) ? Number(doc.position) : (index + 1) * 100;
+    byId.set(doc.id, doc);
     docMap.set(doc.id, doc);
   });
+
+  docs.forEach((doc) => {
+    const folderId = doc.folderId;
+    if (!folderId) return;
+    if (folderId === doc.id) {
+      doc.folderId = null;
+      return;
+    }
+    const parent = byId.get(folderId);
+    if (!parent || (parent.folderId && parent.folderId !== null)) {
+      doc.folderId = null;
+    }
+  });
+}
+
+function isDescendant(potentialDescendantId, ancestorId) {
+  if (!potentialDescendantId || !ancestorId || potentialDescendantId === ancestorId) return false;
+  const visited = new Set();
+  let current = docMap.get(potentialDescendantId);
+  while (current && current.folderId) {
+    if (current.folderId === ancestorId) return true;
+    if (visited.has(current.folderId)) break;
+    visited.add(current.folderId);
+    current = docMap.get(current.folderId);
+  }
+  return false;
+}
+
+function collectDescendantIds(rootId) {
+  const ids = new Set();
+  if (!rootId) return ids;
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop();
+    if (ids.has(current)) continue;
+    ids.add(current);
+    docs.forEach((doc) => {
+      if ((doc.folderId ?? null) === current) {
+        stack.push(doc.id);
+      }
+    });
+  }
+  return ids;
 }
 
 function mergeDoc(saved) {
@@ -175,6 +220,7 @@ function buildList(folderId, level) {
   const list = document.createElement('ul');
   list.className = level === 0 ? 'doc-tree' : 'doc-children';
   list.dataset.folderId = folderId || '';
+  list.dataset.level = String(level);
   if (!readOnly) {
     list.addEventListener('dragover', handleListDragOver);
     list.addEventListener('dragleave', handleListDragLeave);
@@ -191,19 +237,28 @@ function buildNode(doc, level) {
   const li = document.createElement('li');
   li.className = 'doc-node';
   li.dataset.id = doc.id;
-  li.appendChild(createRow(doc));
+  li.dataset.level = String(level);
+  li.appendChild(createRow(doc, level));
 
-  const childList = buildList(doc.id, level + 1);
-  if (!readOnly || childList.children.length > 0) {
-    li.appendChild(childList);
+  if (level < 1) {
+    const childList = buildList(doc.id, level + 1);
+    if (!readOnly || childList.children.length > 0) {
+      li.appendChild(childList);
+    }
   }
   return li;
 }
 
-function createRow(doc) {
+function createRow(doc, level) {
   const row = document.createElement('div');
   row.className = 'doc-row';
   row.dataset.id = doc.id;
+  row.dataset.level = String(level);
+  if (level === 0) {
+    row.classList.add('doc-row-root');
+  } else {
+    row.classList.add('doc-row-child');
+  }
 
   if (!readOnly) {
     row.setAttribute('draggable', 'true');
@@ -257,19 +312,35 @@ function createRow(doc) {
     });
     actions.appendChild(renameBtn);
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'doc-action';
-    addBtn.draggable = false;
-    addBtn.title = 'Add subpage';
-    addBtn.setAttribute('aria-label', 'Add subpage');
-    addBtn.textContent = '+';
-    addBtn.addEventListener('click', (event) => {
+    if (level === 0) {
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'doc-action';
+      addBtn.draggable = false;
+      addBtn.title = 'Add subpage';
+      addBtn.setAttribute('aria-label', 'Add subpage');
+      addBtn.textContent = '+';
+      addBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        addPage(doc.id);
+      });
+      actions.appendChild(addBtn);
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'doc-action doc-action-delete';
+    deleteBtn.draggable = false;
+    deleteBtn.title = 'Delete page';
+    deleteBtn.setAttribute('aria-label', 'Delete page');
+    deleteBtn.textContent = '🗑';
+    deleteBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       event.preventDefault();
-      addPage(doc.id);
+      deleteDoc(doc.id);
     });
-    actions.appendChild(addBtn);
+    actions.appendChild(deleteBtn);
 
     row.appendChild(actions);
   }
@@ -365,8 +436,36 @@ function createDocId() {
   return `doc-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+async function ensureDefaultDoc() {
+  if (readOnly) return null;
+  if (docs.length > 0) return null;
+  const id = createDocId();
+  const payload = {
+    title: 'New document',
+    position: computeNextPosition(null),
+    htmlSnapshot: '<p></p>',
+  };
+  try {
+    await persistDoc(id, payload);
+    currentDocId = id;
+    renderList();
+    return id;
+  } catch (err) {
+    console.error('Failed to create default page', err);
+    setStatus('Failed to create default page');
+    return null;
+  }
+}
+
 async function addPage(parentId = null) {
   if (readOnly) return;
+  if (parentId) {
+    const parent = docMap.get(parentId);
+    if (!parent || (parent.folderId && parent.folderId !== null)) {
+      window.alert('Subpages can only be added to main pages.');
+      return;
+    }
+  }
   const defaultTitle = parentId ? 'New subpage' : 'New page';
   const input = window.prompt('Page title', defaultTitle);
   if (input === null) return;
@@ -385,6 +484,69 @@ async function addPage(parentId = null) {
   } catch (err) {
     console.error('Failed to create page', err);
     window.alert('Failed to create page. Please try again.');
+  }
+}
+
+async function deleteDoc(id) {
+  if (readOnly) return;
+  const doc = docMap.get(id);
+  if (!doc) return;
+  const descendantIds = collectDescendantIds(id);
+  const hasChildren = Array.from(descendantIds).some((docId) => docId !== id);
+  const message = hasChildren
+    ? 'Delete this page and its subpages? This cannot be undone.'
+    : 'Delete this page? This cannot be undone.';
+  const confirmed = window.confirm(message);
+  if (!confirmed) return;
+
+  const previousCurrent = currentDocId;
+  const removedCurrent = descendantIds.has(currentDocId);
+  if (removedCurrent) {
+    currentDocId = null;
+  }
+
+  try {
+    const resp = await fetch(`/api/docs/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (resp.status === 404) {
+      console.warn('Delete page: already removed', id);
+    } else if (!resp.ok) {
+      const text = await resp.text().catch(() => 'Failed to delete page');
+      throw new Error(text || 'Failed to delete page');
+    } else {
+      await resp.json().catch(() => null);
+    }
+
+    await loadDocList();
+
+    if (removedCurrent || !currentDocId || !docMap.has(currentDocId)) {
+      currentDocId = null;
+      const next = getChildren(null)[0] || docs[0] || null;
+      if (next) {
+        await openDoc(next.id);
+      } else {
+        const editor = getEditor();
+        editor.commands.setContent('<p></p>', true);
+        document.title = 'OpenTrain Editor';
+        editorReady = true;
+        lastSavedHash = hashString(editor.getHTML());
+        setStatus(readOnly ? 'Ready' : 'New doc — start typing');
+      }
+    } else {
+      setActiveDoc(currentDocId);
+    }
+  } catch (err) {
+    console.error('Failed to delete page', err);
+    window.alert('Failed to delete page. Please try again.');
+    if (removedCurrent && previousCurrent) {
+      currentDocId = previousCurrent;
+    }
+    await loadDocList();
+    if (currentDocId) {
+      setActiveDoc(currentDocId);
+    }
   }
 }
 
@@ -431,9 +593,19 @@ async function moveDocRelative(dragId, targetId, before) {
 
 async function moveDocToFolderEnd(dragId, folderId) {
   if (!dragId) return;
+  if (folderId && folderId === dragId) return;
   const dragDoc = docMap.get(dragId);
   if (!dragDoc) return;
   const targetFolder = folderId ?? null;
+  if (targetFolder) {
+    const folderDoc = docMap.get(targetFolder);
+    if (!folderDoc || (folderDoc.folderId && folderDoc.folderId !== null)) {
+      return;
+    }
+    if (isDescendant(targetFolder, dragId)) {
+      return;
+    }
+  }
   const oldFolder = dragDoc.folderId ?? null;
 
   const beforeState = new Map();
@@ -516,6 +688,15 @@ async function handleDrop(event) {
 
 function handleListDragOver(event) {
   if (readOnly || !dragState.id) return;
+  const level = Number(event.currentTarget.dataset.level || '0');
+  if (Number.isFinite(level) && level >= 2) return;
+  const folderId = event.currentTarget.dataset.folderId || null;
+  if (folderId) {
+    if (folderId === dragState.id) return;
+    const folderDoc = docMap.get(folderId);
+    if (!folderDoc || (folderDoc.folderId && folderDoc.folderId !== null)) return;
+    if (isDescendant(folderId, dragState.id)) return;
+  }
   event.preventDefault();
   event.stopPropagation();
   event.currentTarget.classList.add('drop-target');
@@ -531,9 +712,22 @@ function handleListDragLeave(event) {
 
 async function handleListDrop(event) {
   if (readOnly || !dragState.id) return;
+  const level = Number(event.currentTarget.dataset.level || '0');
+  if (Number.isFinite(level) && level >= 2) return;
+  const folderId = event.currentTarget.dataset.folderId || null;
+  if (folderId) {
+    if (folderId === dragState.id) {
+      event.currentTarget.classList.remove('drop-target');
+      return;
+    }
+    const folderDoc = docMap.get(folderId);
+    if (!folderDoc || (folderDoc.folderId && folderDoc.folderId !== null) || isDescendant(folderId, dragState.id)) {
+      event.currentTarget.classList.remove('drop-target');
+      return;
+    }
+  }
   event.preventDefault();
   event.stopPropagation();
-  const folderId = event.currentTarget.dataset.folderId || null;
   const dragId = dragState.id;
   dragState.id = null;
   dragState.before = false;
@@ -662,10 +856,18 @@ window.__editorShell = {
         currentDocId = first.id;
       }
     }
+    if (!currentDocId && !readOnly) {
+      const created = await ensureDefaultDoc();
+      if (created) {
+        currentDocId = created;
+      }
+    }
     if (!currentDocId) {
       const editor = getEditor();
       editor.commands.setContent('<p></p>', true);
+      document.title = 'OpenTrain Editor';
       editorReady = true;
+      setStatus(readOnly ? 'Ready' : 'New doc — start typing');
       return;
     }
     await openDoc(currentDocId);
