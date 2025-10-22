@@ -333,7 +333,12 @@ const editor = new Editor({
   },
 });
 
-window._openTrainWireEditor(editor);
+if (typeof window._openTrainWireEditor === 'function') {
+  window._openTrainWireEditor(editor);
+  console.log('[OpenTrain] Bridge wired');
+} else {
+  console.warn('[OpenTrain] Bridge function not found on window');
+}
 
 function debounce(fn, delay) {
   let timer = null;
