@@ -51,7 +51,7 @@ export async function listDocsByJob(jobId) {
   const { rows } = await query(
     `select * from docs
      where job_id = $1
-     order by position asc nulls last, updated_at desc`,
+     order by position asc nulls last, created_at asc`,
     [jobId]
   );
   return rows.map(mapRow);

@@ -5,6 +5,7 @@ import { docsRoutes } from './routes/docs.js';
 import { healthRoutes } from './routes/health.js';
 import { migrate } from './lib/migrate.js';
 import { pool } from './lib/db.js';
+import { listDocsByJob } from './lib/store_pg.js';
 
 const app = Fastify({ logger: true });
 
@@ -32,22 +33,42 @@ await app.register(formbody);
 
 app.register(healthRoutes, { prefix: '/health' });
 
+async function requireApiKey(request, reply) {
+  const auth = request.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+  const token = auth.slice('Bearer '.length).trim();
+  if (token !== docsApiKey) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+}
+
 app.register(
   async (instance) => {
-    instance.addHook('preValidation', async (request, reply) => {
-      const auth = request.headers.authorization;
-      if (!auth || !auth.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-      const token = auth.slice('Bearer '.length).trim();
-      if (token !== docsApiKey) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-    });
+    instance.addHook('preValidation', requireApiKey);
 
     await instance.register(docsRoutes);
   },
   { prefix: '/docs' }
+);
+
+app.register(
+  async (instance) => {
+    instance.addHook('preValidation', requireApiKey);
+
+    instance.get('/:jobId/docs', async (request, reply) => {
+      const { jobId } = request.params;
+      try {
+        const items = await listDocsByJob(jobId);
+        return reply.send(items);
+      } catch (error) {
+        request.log.error(error, 'failed to list docs by job');
+        return reply.code(500).send({ error: error.message });
+      }
+    });
+  },
+  { prefix: '/jobs' }
 );
 
 const port = process.env.PORT || 3001;
