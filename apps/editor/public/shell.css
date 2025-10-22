@@ -192,6 +192,18 @@
   background: rgba(239, 68, 68, 0.14);
 }
 
+.doc-action-rename,
+.doc-action-delete {
+  display: none;
+}
+
+.doc-row:hover .doc-action-rename,
+.doc-row:hover .doc-action-delete,
+.doc-row:focus-within .doc-action-rename,
+.doc-row:focus-within .doc-action-delete {
+  display: inline-flex;
+}
+
 .doc-action-disabled {
   opacity: 0.5;
   cursor: not-allowed;
