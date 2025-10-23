@@ -6,6 +6,10 @@
   <title>OpenTrain Editor</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="shell.css" />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+  />
 </head>
 <body>
   <div id="app">
@@ -13,7 +17,9 @@
       <header>
         <strong>Pages</strong>
         <div class="sidebar-spacer" aria-hidden="true"></div>
-        <button type="button" id="add-page" title="New page" aria-label="New page">＋</button>
+        <button type="button" id="add-page" title="New page" aria-label="New page">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
         <div id="save-status" aria-live="polite">—</div>
       </header>
       <nav id="doc-list" aria-label="Pages"></nav>

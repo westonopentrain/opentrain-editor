@@ -29,6 +29,78 @@ let rootId = null;
 let docs = [];
 const docMap = new Map();
 const dragState = { id: null, before: false };
+const expandedMainDocs = new Set();
+const iconPickerState = {
+  panel: null,
+  docId: null,
+  anchor: null,
+  input: null,
+  outsideHandler: null,
+  keydownHandler: null,
+  scrollHandler: null,
+};
+const EMOJI_CHOICES = [
+  '📄',
+  '📝',
+  '📘',
+  '📚',
+  '✅',
+  '🧠',
+  '💡',
+  '⭐️',
+  '🔥',
+  '🚀',
+  '🎯',
+  '🗂️',
+  '📆',
+  '🧩',
+  '🔖',
+  '📌',
+  '💬',
+  '🛠️',
+  '⚙️',
+  '🧪',
+  '🗒️',
+  '📈',
+  '🛡️',
+  '☑️',
+  '🧭',
+  '🌟',
+  '🏁',
+  '📥',
+  '📤',
+  '📦',
+  '🪄',
+  '💭',
+  '🔍',
+  '⏱️',
+  '🌐',
+  '💼',
+];
+const DEFAULT_DOC_ICON = 'description';
+const MAX_ICON_CODEPOINTS = 2;
+
+function createMaterialIcon(name, options = {}) {
+  const span = document.createElement('span');
+  span.className = 'material-symbols-outlined';
+  span.textContent = name;
+  span.setAttribute('aria-hidden', 'true');
+  if (options.filled) {
+    span.classList.add('material-icon-filled');
+  }
+  if (typeof options.size === 'number') {
+    span.style.fontSize = `${options.size}px`;
+  }
+  return span;
+}
+
+function normalizeIconValue(value) {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return Array.from(trimmed).slice(0, MAX_ICON_CODEPOINTS).join('');
+}
 
 function getEditor() {
   const instance = window.editor;
@@ -46,6 +118,7 @@ function normalizeDoc(input, fallbackIndex = 0) {
     jobId: input?.jobId ?? null,
     folderId: typeof input?.folderId === 'string' && input.folderId.trim() ? input.folderId : null,
     position: Number.isFinite(positionValue) ? positionValue : (fallbackIndex + 1) * 100,
+    icon: typeof input?.icon === 'string' ? (input.icon.trim() || null) : null,
     createdAt: input?.createdAt ?? null,
     updatedAt: input?.updatedAt ?? null,
   };
@@ -182,6 +255,7 @@ async function persistDoc(id, updates) {
   if (Object.prototype.hasOwnProperty.call(updates, 'position')) body.position = updates.position;
   if (Object.prototype.hasOwnProperty.call(updates, 'folderId')) body.folderId = updates.folderId;
   if (Object.prototype.hasOwnProperty.call(updates, 'htmlSnapshot')) body.htmlSnapshot = updates.htmlSnapshot;
+  if (Object.prototype.hasOwnProperty.call(updates, 'icon')) body.icon = updates.icon;
 
   const resp = await fetch(`/api/docs/${encodeURIComponent(id)}`, {
     method: 'PUT',
@@ -242,23 +316,36 @@ function buildNode(doc, level) {
   li.className = 'doc-node';
   li.dataset.id = doc.id;
   li.dataset.level = String(level);
-  li.appendChild(createRow(doc, level));
+  const isRootDoc = Boolean(rootId) && doc.id === rootId;
+  const hasChildren = level < 1 && getChildren(doc.id).length > 0;
+  const expanded = level === 0 ? (isRootDoc ? true : expandedMainDocs.has(doc.id)) : true;
+  const childListId = `doc-children-${doc.id}`;
+  li.appendChild(createRow(doc, level, { hasChildren, expanded, isRootDoc, childListId }));
 
   if (level < 1) {
     const childList = buildList(doc.id, level + 1);
     if (!readOnly || childList.children.length > 0) {
+      if (level === 0) {
+        childList.id = childListId;
+        if (!isRootDoc && hasChildren) {
+          childList.classList.toggle('doc-children-collapsed', !expanded);
+        }
+      }
       li.appendChild(childList);
     }
   }
   return li;
 }
 
-function createRow(doc, level) {
+function createRow(doc, level, options = {}) {
   const row = document.createElement('div');
   row.className = 'doc-row';
   row.dataset.id = doc.id;
   row.dataset.level = String(level);
-  const isRootDoc = Boolean(rootId) && doc.id === rootId;
+  const isRootDoc = typeof options.isRootDoc === 'boolean' ? options.isRootDoc : (Boolean(rootId) && doc.id === rootId);
+  const hasChildren = Boolean(options.hasChildren);
+  const expanded = Boolean(options.expanded);
+  const childListId = options.childListId || '';
   if (level === 0) {
     row.classList.add('doc-row-root');
   } else {
@@ -278,21 +365,83 @@ function createRow(doc, level) {
     row.addEventListener('drop', handleDrop);
   }
 
+  const showToggle = level === 0 && hasChildren && !isRootDoc;
+  if (showToggle) {
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'doc-toggle';
+    toggleBtn.dataset.id = doc.id;
+    toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    toggleBtn.setAttribute('aria-label', expanded ? 'Collapse subpages' : 'Expand subpages');
+    if (childListId) {
+      toggleBtn.setAttribute('aria-controls', childListId);
+    }
+    toggleBtn.appendChild(createMaterialIcon(expanded ? 'expand_more' : 'chevron_right'));
+    toggleBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (expandedMainDocs.has(doc.id)) {
+        expandedMainDocs.delete(doc.id);
+      } else {
+        expandedMainDocs.add(doc.id);
+      }
+      renderList();
+    });
+    rowMain.appendChild(toggleBtn);
+  }
+
+  let hasHandle = false;
   if (!readOnly && !isRootDoc) {
     const handle = document.createElement('span');
     handle.className = 'doc-handle';
-    handle.textContent = '⋮⋮';
     handle.setAttribute('aria-hidden', 'true');
+    handle.appendChild(createMaterialIcon('drag_indicator'));
     rowMain.appendChild(handle);
+    hasHandle = true;
   }
+
+  if (!hasHandle) {
+    const placeholder = document.createElement('span');
+    placeholder.className = 'doc-handle doc-handle-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    rowMain.appendChild(placeholder);
+  }
+
+  const iconButton = document.createElement('button');
+  iconButton.type = 'button';
+  iconButton.className = 'doc-icon-button';
+  iconButton.dataset.id = doc.id;
+  iconButton.draggable = false;
+  const titleText = formatDocTitle(doc);
+  const iconValue = typeof doc.icon === 'string' ? doc.icon.trim() : '';
+  if (iconValue) {
+    iconButton.textContent = iconValue;
+  } else {
+    iconButton.classList.add('doc-icon-empty');
+    iconButton.appendChild(createMaterialIcon(DEFAULT_DOC_ICON));
+  }
+  const iconLabel = iconValue ? `Change icon for ${titleText}` : `Add icon for ${titleText}`;
+  iconButton.title = iconLabel;
+  iconButton.setAttribute('aria-label', iconLabel);
+  if (readOnly) {
+    iconButton.disabled = true;
+    iconButton.setAttribute('aria-disabled', 'true');
+  } else {
+    iconButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      openIconPicker(doc.id, iconButton);
+    });
+  }
+  rowMain.appendChild(iconButton);
 
   const openBtn = document.createElement('button');
   openBtn.type = 'button';
   openBtn.className = 'doc-open';
   openBtn.draggable = false;
   openBtn.dataset.id = doc.id;
-  openBtn.textContent = formatDocTitle(doc);
-  openBtn.title = formatDocTitle(doc);
+  openBtn.textContent = titleText;
+  openBtn.title = titleText;
   openBtn.addEventListener('click', () => {
     if (doc.id !== currentDocId) {
       openDoc(doc.id).catch((err) => {
@@ -313,7 +462,7 @@ function createRow(doc, level) {
     renameBtn.draggable = false;
     renameBtn.title = 'Rename page';
     renameBtn.setAttribute('aria-label', 'Rename page');
-    renameBtn.textContent = '✎';
+    renameBtn.appendChild(createMaterialIcon('edit'));
     renameBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       event.preventDefault();
@@ -328,7 +477,7 @@ function createRow(doc, level) {
       addBtn.draggable = false;
       addBtn.title = 'Add subpage';
       addBtn.setAttribute('aria-label', 'Add subpage');
-      addBtn.textContent = '+';
+      addBtn.appendChild(createMaterialIcon('add'));
       addBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
@@ -341,7 +490,7 @@ function createRow(doc, level) {
     deleteBtn.type = 'button';
     deleteBtn.className = 'doc-action doc-action-delete';
     deleteBtn.draggable = false;
-    deleteBtn.textContent = '🗑';
+    deleteBtn.appendChild(createMaterialIcon('delete'));
     if (isRootDoc) {
       deleteBtn.disabled = true;
       deleteBtn.title = 'Root instructions cannot be deleted';
@@ -367,6 +516,202 @@ function createRow(doc, level) {
   }
 
   return row;
+}
+
+function pruneExpandedMainDocs() {
+  if (!expandedMainDocs.size) return;
+  const existing = new Set(docs.map((doc) => doc.id));
+  expandedMainDocs.forEach((id) => {
+    if (!existing.has(id) || getChildren(id).length === 0) {
+      expandedMainDocs.delete(id);
+    }
+  });
+}
+
+function ensureAncestorsExpanded(docId) {
+  if (!docId) return;
+  let current = docMap.get(docId);
+  const visited = new Set();
+  while (current && current.folderId) {
+    if (visited.has(current.folderId)) break;
+    visited.add(current.folderId);
+    const parent = docMap.get(current.folderId);
+    if (!parent) break;
+    expandedMainDocs.add(parent.id);
+    current = parent;
+  }
+}
+
+function closeIconPicker() {
+  if (!iconPickerState.panel) return;
+  if (iconPickerState.outsideHandler) {
+    document.removeEventListener('mousedown', iconPickerState.outsideHandler, true);
+  }
+  if (iconPickerState.keydownHandler) {
+    document.removeEventListener('keydown', iconPickerState.keydownHandler, true);
+  }
+  if (iconPickerState.scrollHandler) {
+    window.removeEventListener('scroll', iconPickerState.scrollHandler, true);
+  }
+  window.removeEventListener('resize', closeIconPicker);
+  iconPickerState.panel.remove();
+  iconPickerState.panel = null;
+  iconPickerState.docId = null;
+  iconPickerState.anchor = null;
+  iconPickerState.input = null;
+  iconPickerState.outsideHandler = null;
+  iconPickerState.keydownHandler = null;
+  iconPickerState.scrollHandler = null;
+}
+
+function applyIconFromInput(docId, input) {
+  if (!input) return;
+  const normalized = normalizeIconValue(input.value);
+  if (typeof normalized === 'undefined') return;
+  if (!normalized) {
+    setDocIcon(docId, null);
+  } else {
+    setDocIcon(docId, normalized);
+  }
+}
+
+async function setDocIcon(docId, value) {
+  if (readOnly || !docId) return;
+  const normalized = value === null ? null : normalizeIconValue(value);
+  if (typeof normalized === 'undefined') return;
+  try {
+    await persistDoc(docId, { icon: normalized });
+    closeIconPicker();
+    renderList();
+  } catch (err) {
+    console.error('Failed to update icon', err);
+    window.alert('Failed to update icon. Please try again.');
+  }
+}
+
+function openIconPicker(docId, anchor) {
+  if (readOnly) return;
+  const doc = docMap.get(docId);
+  if (!doc || !anchor) return;
+  closeIconPicker();
+
+  const panel = document.createElement('div');
+  panel.className = 'icon-picker';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', `Select icon for ${formatDocTitle(doc)}`);
+
+  const title = document.createElement('p');
+  title.className = 'icon-picker-title';
+  title.textContent = 'Select an icon';
+  panel.appendChild(title);
+
+  const grid = document.createElement('div');
+  grid.className = 'icon-picker-grid';
+  EMOJI_CHOICES.forEach((emoji) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-picker-emoji';
+    btn.textContent = emoji;
+    btn.addEventListener('click', () => {
+      setDocIcon(docId, emoji);
+    });
+    grid.appendChild(btn);
+  });
+  panel.appendChild(grid);
+
+  const inputRow = document.createElement('div');
+  inputRow.className = 'icon-picker-input-row';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'icon-picker-input';
+  input.placeholder = 'Paste emoji…';
+  input.maxLength = 8;
+  if (typeof doc.icon === 'string') {
+    input.value = doc.icon;
+  }
+  inputRow.appendChild(input);
+
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'icon-picker-apply';
+  applyBtn.textContent = 'Set';
+  applyBtn.addEventListener('click', () => {
+    applyIconFromInput(docId, input);
+  });
+  inputRow.appendChild(applyBtn);
+  panel.appendChild(inputRow);
+
+  const footer = document.createElement('div');
+  footer.className = 'icon-picker-footer';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'icon-picker-clear';
+  clearBtn.textContent = 'Remove icon';
+  clearBtn.addEventListener('click', () => {
+    setDocIcon(docId, null);
+  });
+  footer.appendChild(clearBtn);
+
+  const hint = document.createElement('span');
+  hint.className = 'icon-picker-hint';
+  hint.textContent = 'Esc to close';
+  footer.appendChild(hint);
+
+  panel.appendChild(footer);
+  document.body.appendChild(panel);
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+  let top = window.scrollY + anchorRect.bottom + 8;
+  let left = window.scrollX + anchorRect.left + anchorRect.width / 2 - panelRect.width / 2;
+  const minLeft = window.scrollX + 16;
+  const maxLeft = window.scrollX + viewportWidth - panelRect.width - 16;
+  if (left < minLeft) left = minLeft;
+  if (left > maxLeft) left = Math.max(maxLeft, minLeft);
+  panel.style.top = `${Math.round(top)}px`;
+  panel.style.left = `${Math.round(left)}px`;
+
+  iconPickerState.panel = panel;
+  iconPickerState.docId = docId;
+  iconPickerState.anchor = anchor;
+  iconPickerState.input = input;
+
+  const outsideHandler = (event) => {
+    if (!iconPickerState.panel) return;
+    if (iconPickerState.panel.contains(event.target)) return;
+    if (iconPickerState.anchor && iconPickerState.anchor.contains(event.target)) return;
+    closeIconPicker();
+  };
+  const keydownHandler = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeIconPicker();
+      return;
+    }
+    if (event.key === 'Enter' && event.target === input) {
+      event.preventDefault();
+      applyIconFromInput(docId, input);
+    }
+  };
+  const scrollHandler = () => {
+    closeIconPicker();
+  };
+
+  document.addEventListener('mousedown', outsideHandler, true);
+  document.addEventListener('keydown', keydownHandler, true);
+  window.addEventListener('resize', closeIconPicker);
+  window.addEventListener('scroll', scrollHandler, true);
+
+  iconPickerState.outsideHandler = outsideHandler;
+  iconPickerState.keydownHandler = keydownHandler;
+  iconPickerState.scrollHandler = scrollHandler;
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 0);
 }
 
 function parseListResponse(payload) {
@@ -476,6 +821,7 @@ async function loadDocList() {
 }
 
 function renderList(items) {
+  const previousScrollTop = $list ? $list.scrollTop : 0;
   if (Array.isArray(items)) {
     const filtered = items.filter((item) => item && item.id);
     const normalized = filtered.map((item, index) => normalizeDoc(item, index));
@@ -487,6 +833,9 @@ function renderList(items) {
   }
 
   rebuildDocMap();
+  pruneExpandedMainDocs();
+  ensureAncestorsExpanded(currentDocId);
+  closeIconPicker();
   clearDropIndicators();
   $list.innerHTML = '';
   const tree = buildList(null, 0);
@@ -500,6 +849,9 @@ function renderList(items) {
   }
 
   setActiveDoc(currentDocId);
+  if (Number.isFinite(previousScrollTop)) {
+    $list.scrollTop = previousScrollTop;
+  }
 }
 
 async function renameDoc(id) {
@@ -599,6 +951,9 @@ async function addPage(parentId = null) {
   }
   try {
     await persistDoc(id, payload);
+    if (targetParentId) {
+      expandedMainDocs.add(targetParentId);
+    }
     currentDocId = id;
     renderList();
     await openDoc(id);
@@ -730,6 +1085,9 @@ async function moveDocToFolderEnd(dragId, folderId) {
     if (isDescendant(targetFolder, dragId)) {
       return;
     }
+  }
+  if (targetFolder) {
+    expandedMainDocs.add(targetFolder);
   }
   const oldFolder = dragDoc.folderId ?? null;
 
@@ -937,7 +1295,13 @@ function hashString(str) {
 
 async function openDoc(docId) {
   currentDocId = docId;
-  setActiveDoc(docId);
+  const expandedBefore = expandedMainDocs.size;
+  ensureAncestorsExpanded(docId);
+  if (expandedMainDocs.size !== expandedBefore) {
+    renderList();
+  } else {
+    setActiveDoc(docId);
+  }
   const meta = docMap.get(docId);
   document.title = meta ? formatDocTitle(meta) : 'OpenTrain Editor';
 

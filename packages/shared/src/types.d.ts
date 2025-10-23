@@ -8,6 +8,7 @@ export interface JobDoc {
   title: string;
   tiptapJson?: TiptapDoc | null;
   htmlSnapshot?: string | null;
+  icon?: string | null;
   version?: number;
   createdAt: string;
   updatedAt: string;
