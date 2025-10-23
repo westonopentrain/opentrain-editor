@@ -37,11 +37,16 @@ No Tiptap Cloud or account is required for the initial setup. Collaboration can 
 
 ## Quick Verification After Deploy
 
-1. Visit the Render Static Site URL directly. You should see the editor with the toolbar, floating menu, and slash command prompt.
+1. Visit the Render Static Site URL directly. You should see the Notion-style editor with floating/bubble menus and the slash command prompt.
 2. In a Bubble preview, load the private plugin element configured with your Render URL. Confirm the editor reports `{ type: "ready" }` by observing the `is_ready` state.
 3. Type into the editor and verify that `{ type: "change" }` messages populate the Bubble states `json` and `html`.
 4. Trigger the `insert_image` action in Bubble with a public image URL and confirm the image appears in the editor.
 5. Refresh the page and replay saved JSON using the `load_json` action to confirm content persistence.
+
+## Read-only & Styling Notes
+
+- Pass `{ type: 'load', readOnly: true }` to the iframe (or use an `rw`/`ro` token via the shell) to toggle the editor between editable and read-only modes. The shell also respects `editor.setEditable(false)` when you need to lock the surface.
+- Notion-inspired layout rules live in [`public/css/notion.css`](public/css/notion.css). Update that file to adjust spacing, typography, or menu appearance without touching the JavaScript bundle.
 
 ## Keyboard Shortcuts
 
