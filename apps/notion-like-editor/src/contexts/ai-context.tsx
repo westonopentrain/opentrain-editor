@@ -1,7 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { fetchAiToken, getUrlParam } from "@/lib/tiptap-collab-utils"
+import {
+  fetchAiToken,
+  getUrlParam,
+  TIPTAP_AI_IS_CONFIGURED,
+} from "@/lib/tiptap-collab-utils"
 
 export type AiContextValue = {
   aiToken: string | null
@@ -24,11 +28,11 @@ export const useAi = (): AiContextValue => {
 
 export const useAiToken = () => {
   const [aiToken, setAiToken] = React.useState<string | null>(null)
-  const [hasAi, setHasAi] = React.useState<boolean>(true)
+  const [hasAi, setHasAi] = React.useState<boolean>(TIPTAP_AI_IS_CONFIGURED)
 
   React.useEffect(() => {
     const noAiParam = getUrlParam("noAi")
-    setHasAi(parseInt(noAiParam || "0") !== 1)
+    setHasAi(TIPTAP_AI_IS_CONFIGURED && parseInt(noAiParam || "0") !== 1)
   }, [])
 
   React.useEffect(() => {
@@ -36,10 +40,21 @@ export const useAiToken = () => {
 
     const getToken = async () => {
       const token = await fetchAiToken()
+      if (!token) {
+        setHasAi(false)
+        return
+      }
       setAiToken(token)
     }
 
     getToken()
+  }, [hasAi])
+
+  React.useEffect(() => {
+    if (hasAi) {
+      return
+    }
+    setAiToken(null)
   }, [hasAi])
 
   return { aiToken, hasAi }

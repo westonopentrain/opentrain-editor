@@ -17,6 +17,15 @@ export const TIPTAP_AI_TOKEN = import.meta.env.VITE_TIPTAP_AI_TOKEN || ""
 export const USE_JWT_TOKEN_API_ENDPOINT =
   import.meta.env.VITE_USE_JWT_TOKEN_API_ENDPOINT || ""
 
+export const TIPTAP_COLLAB_IS_CONFIGURED = Boolean(
+  (TIPTAP_COLLAB_DOC_PREFIX && TIPTAP_COLLAB_APP_ID && TIPTAP_COLLAB_TOKEN) ||
+    USE_JWT_TOKEN_API_ENDPOINT
+)
+
+export const TIPTAP_AI_IS_CONFIGURED = Boolean(
+  (TIPTAP_AI_APP_ID && TIPTAP_AI_TOKEN) || USE_JWT_TOKEN_API_ENDPOINT
+)
+
 const NODE_TYPE_LABELS: Record<string, string> = {
   paragraph: "text",
   codeBlock: "Codeblock",
@@ -170,6 +179,10 @@ export const getAvatar = (name: string) => {
  * Fetch collaboration JWT token from the API
  */
 export const fetchCollabToken = async () => {
+  if (!TIPTAP_COLLAB_IS_CONFIGURED) {
+    return null
+  }
+
   if (USE_JWT_TOKEN_API_ENDPOINT) {
     try {
       // Example API endpoint that returns a JWT token.
@@ -193,27 +206,10 @@ export const fetchCollabToken = async () => {
     }
   }
 
-  // TODO: as a developer, use the example JWT token provided in the Tiptap
-  // Cloud dashboard for local development only. In production, implement an API
-  // endpoint that generates a new JWT token in the server. Then, call that API
-  // endpoint from this function.
-  // When you've implemented the API endpoint, remove the code below.
   if (!TIPTAP_COLLAB_TOKEN) {
-    alert(`Set up your environment variables to connect to Tiptap Cloud:
-- VITE_TIPTAP_COLLAB_DOC_PREFIX - Prefix for identifying collaborative documents
-- VITE_TIPTAP_COLLAB_APP_ID - Your Document Server App ID
-- VITE_TIPTAP_COLLAB_TOKEN - JWT token for accessing Collaboration services (do not use in production)
-- VITE_TIPTAP_AI_APP_ID - Your AI App ID
-- VITE_TIPTAP_AI_TOKEN - JWT token for accessing AI services (do not use in production)
-Follow this guide: https://tiptap.dev/docs/ui-components/templates/notion-like-editor`)
-  } else {
-    console.warn(
-      "You are using the example JWT token provided in the Tiptap Cloud dashboard. This is only for local development and should not be used in production. In production, implement an API endpoint that generates a new JWT token in the server, and call that API endpoint from the fetchCollabToken function. More info in the docs: https://tiptap.dev/docs/ui-components/templates/notion-like-editor"
-    )
+    return null
   }
 
-  // A hardcoded token for demonstration purposes.
-  // TODO: remove this in production and use the API endpoint instead
   return TIPTAP_COLLAB_TOKEN
 }
 
@@ -221,6 +217,10 @@ Follow this guide: https://tiptap.dev/docs/ui-components/templates/notion-like-e
  * Fetch AI JWT token from the API
  */
 export const fetchAiToken = async () => {
+  if (!TIPTAP_AI_IS_CONFIGURED) {
+    return null
+  }
+
   if (USE_JWT_TOKEN_API_ENDPOINT) {
     try {
       // Example API endpoint that returns a JWT token.
@@ -244,26 +244,9 @@ export const fetchAiToken = async () => {
     }
   }
 
-  // TODO: as a developer, use the example JWT token provided in the Tiptap
-  // Cloud dashboard for local development only. In production, implement an API
-  // endpoint that generates a new JWT token in the server. Then, call that API
-  // endpoint from this function.
-  // When you've implemented the API endpoint, remove the code below.
   if (!TIPTAP_AI_TOKEN) {
-    alert(`Set up your environment variables to connect to Tiptap Cloud:
-- VITE_TIPTAP_COLLAB_DOC_PREFIX - Prefix for identifying collaborative documents
-- VITE_TIPTAP_COLLAB_APP_ID - Your Document Server App ID
-- VITE_TIPTAP_COLLAB_TOKEN - JWT token for accessing Collaboration services (do not use in production)
-- VITE_TIPTAP_AI_APP_ID - Your AI App ID
-- VITE_TIPTAP_AI_TOKEN - JWT token for accessing AI services (do not use in production)
-Follow this guide: https://tiptap.dev/docs/ui-components/templates/notion-like-editor`)
-  } else {
-    console.warn(
-      "You are using the example JWT token provided in the Tiptap Cloud dashboard. This is only for local development and should not be used in production. In production, implement an API endpoint that generates a new JWT token in the server, and call that API endpoint from the fetchAiToken function. More info in the docs: https://tiptap.dev/docs/ui-components/templates/notion-like-editor"
-    )
+    return null
   }
 
-  // A hardcoded token for demonstration purposes.
-  // TODO: remove this in production and use the API endpoint instead
   return TIPTAP_AI_TOKEN
 }

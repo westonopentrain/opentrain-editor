@@ -20,10 +20,22 @@
   background-color: var(--tt-notion-like-editor-header-bg);
   border-bottom: 1px solid var(--tt-notion-like-editor-header-border);
 
+  &-status {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--tt-gray-light-a-600);
+    min-height: 1.5rem;
+  }
+
   &-actions {
     display: flex;
     align-items: center;
     flex-direction: row;
     gap: 0.5rem;
   }
+}
+
+.dark .notion-like-editor-header-status {
+  color: var(--tt-gray-dark-a-600);
 }
