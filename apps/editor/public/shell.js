@@ -38,45 +38,9 @@ const iconPickerState = {
   outsideHandler: null,
   keydownHandler: null,
   scrollHandler: null,
+  inputHandler: null,
+  lastValue: undefined,
 };
-const EMOJI_CHOICES = [
-  '📄',
-  '📝',
-  '📘',
-  '📚',
-  '✅',
-  '🧠',
-  '💡',
-  '⭐️',
-  '🔥',
-  '🚀',
-  '🎯',
-  '🗂️',
-  '📆',
-  '🧩',
-  '🔖',
-  '📌',
-  '💬',
-  '🛠️',
-  '⚙️',
-  '🧪',
-  '🗒️',
-  '📈',
-  '🛡️',
-  '☑️',
-  '🧭',
-  '🌟',
-  '🏁',
-  '📥',
-  '📤',
-  '📦',
-  '🪄',
-  '💭',
-  '🔍',
-  '⏱️',
-  '🌐',
-  '💼',
-];
 const DEFAULT_DOC_ICON = 'description';
 const MAX_ICON_CODEPOINTS = 2;
 
@@ -390,23 +354,6 @@ function createRow(doc, level, options = {}) {
     rowMain.appendChild(toggleBtn);
   }
 
-  let hasHandle = false;
-  if (!readOnly && !isRootDoc) {
-    const handle = document.createElement('span');
-    handle.className = 'doc-handle';
-    handle.setAttribute('aria-hidden', 'true');
-    handle.appendChild(createMaterialIcon('drag_indicator'));
-    rowMain.appendChild(handle);
-    hasHandle = true;
-  }
-
-  if (!hasHandle) {
-    const placeholder = document.createElement('span');
-    placeholder.className = 'doc-handle doc-handle-placeholder';
-    placeholder.setAttribute('aria-hidden', 'true');
-    rowMain.appendChild(placeholder);
-  }
-
   const iconButton = document.createElement('button');
   iconButton.type = 'button';
   iconButton.className = 'doc-icon-button';
@@ -544,6 +491,9 @@ function ensureAncestorsExpanded(docId) {
 
 function closeIconPicker() {
   if (!iconPickerState.panel) return;
+  if (iconPickerState.input && iconPickerState.inputHandler) {
+    iconPickerState.input.removeEventListener('input', iconPickerState.inputHandler);
+  }
   if (iconPickerState.outsideHandler) {
     document.removeEventListener('mousedown', iconPickerState.outsideHandler, true);
   }
@@ -562,15 +512,26 @@ function closeIconPicker() {
   iconPickerState.outsideHandler = null;
   iconPickerState.keydownHandler = null;
   iconPickerState.scrollHandler = null;
+  iconPickerState.inputHandler = null;
+  iconPickerState.lastValue = undefined;
 }
 
 function applyIconFromInput(docId, input) {
   if (!input) return;
   const normalized = normalizeIconValue(input.value);
   if (typeof normalized === 'undefined') return;
-  if (!normalized) {
+  if (normalized === null) {
+    if (input.value !== '') {
+      input.value = '';
+    }
+  } else if (normalized !== input.value) {
+    input.value = normalized;
+  }
+  if (normalized === iconPickerState.lastValue) return;
+  iconPickerState.lastValue = normalized;
+  if (normalized === null) {
     setDocIcon(docId, null);
-  } else {
+  } else if (typeof normalized === 'string' && normalized) {
     setDocIcon(docId, normalized);
   }
 }
@@ -579,6 +540,11 @@ async function setDocIcon(docId, value) {
   if (readOnly || !docId) return;
   const normalized = value === null ? null : normalizeIconValue(value);
   if (typeof normalized === 'undefined') return;
+  const existing = normalizeIconValue(docMap.get(docId)?.icon ?? null);
+  if (existing === normalized) {
+    closeIconPicker();
+    return;
+  }
   try {
     await persistDoc(docId, { icon: normalized });
     closeIconPicker();
@@ -602,44 +568,18 @@ function openIconPicker(docId, anchor) {
 
   const title = document.createElement('p');
   title.className = 'icon-picker-title';
-  title.textContent = 'Select an icon';
+  title.textContent = 'Choose an emoji';
   panel.appendChild(title);
 
-  const grid = document.createElement('div');
-  grid.className = 'icon-picker-grid';
-  EMOJI_CHOICES.forEach((emoji) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-picker-emoji';
-    btn.textContent = emoji;
-    btn.addEventListener('click', () => {
-      setDocIcon(docId, emoji);
-    });
-    grid.appendChild(btn);
-  });
-  panel.appendChild(grid);
-
-  const inputRow = document.createElement('div');
-  inputRow.className = 'icon-picker-input-row';
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'icon-picker-input';
-  input.placeholder = 'Paste emoji…';
+  input.placeholder = 'Search emoji…';
   input.maxLength = 8;
-  if (typeof doc.icon === 'string') {
-    input.value = doc.icon;
-  }
-  inputRow.appendChild(input);
-
-  const applyBtn = document.createElement('button');
-  applyBtn.type = 'button';
-  applyBtn.className = 'icon-picker-apply';
-  applyBtn.textContent = 'Set';
-  applyBtn.addEventListener('click', () => {
-    applyIconFromInput(docId, input);
-  });
-  inputRow.appendChild(applyBtn);
-  panel.appendChild(inputRow);
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('inputmode', 'text');
+  panel.appendChild(input);
 
   const footer = document.createElement('div');
   footer.className = 'icon-picker-footer';
@@ -649,13 +589,14 @@ function openIconPicker(docId, anchor) {
   clearBtn.className = 'icon-picker-clear';
   clearBtn.textContent = 'Remove icon';
   clearBtn.addEventListener('click', () => {
+    iconPickerState.lastValue = null;
     setDocIcon(docId, null);
   });
   footer.appendChild(clearBtn);
 
   const hint = document.createElement('span');
   hint.className = 'icon-picker-hint';
-  hint.textContent = 'Esc to close';
+  hint.textContent = 'Use your device emoji picker to search.';
   footer.appendChild(hint);
 
   panel.appendChild(footer);
@@ -673,10 +614,18 @@ function openIconPicker(docId, anchor) {
   panel.style.top = `${Math.round(top)}px`;
   panel.style.left = `${Math.round(left)}px`;
 
+  const initialValue = normalizeIconValue(doc.icon ?? null);
+  if (typeof initialValue === 'string') {
+    input.value = initialValue;
+  } else if (initialValue === null) {
+    input.value = '';
+  }
+
   iconPickerState.panel = panel;
   iconPickerState.docId = docId;
   iconPickerState.anchor = anchor;
   iconPickerState.input = input;
+  iconPickerState.lastValue = initialValue;
 
   const outsideHandler = (event) => {
     if (!iconPickerState.panel) return;
@@ -698,19 +647,29 @@ function openIconPicker(docId, anchor) {
   const scrollHandler = () => {
     closeIconPicker();
   };
+  const inputHandler = () => {
+    applyIconFromInput(docId, input);
+  };
 
   document.addEventListener('mousedown', outsideHandler, true);
   document.addEventListener('keydown', keydownHandler, true);
   window.addEventListener('resize', closeIconPicker);
   window.addEventListener('scroll', scrollHandler, true);
+  input.addEventListener('input', inputHandler);
 
   iconPickerState.outsideHandler = outsideHandler;
   iconPickerState.keydownHandler = keydownHandler;
   iconPickerState.scrollHandler = scrollHandler;
+  iconPickerState.inputHandler = inputHandler;
 
   setTimeout(() => {
     input.focus();
     input.select();
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+      } catch (_) {}
+    }
   }, 0);
 }
 
@@ -830,6 +789,7 @@ function renderList(items) {
       normalized.unshift(normalizeDoc({ id: currentDocId, title: 'Current page', position: -1, folderId: null }, 0));
     }
     docs = normalized;
+    expandedMainDocs.clear();
   }
 
   rebuildDocMap();
