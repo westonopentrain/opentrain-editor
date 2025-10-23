@@ -2,15 +2,22 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(cors());
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
+const NOTION_DIST_DIR = path.resolve(__dirname, '../notion-like-editor/dist');
 const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://www.opentrain.ai;';
 
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', FRAME_ANCESTORS);
+  const existing = res.getHeader('Content-Security-Policy');
+  const merged = [existing, FRAME_ANCESTORS].filter(Boolean).join(' ');
+  res.setHeader('Content-Security-Policy', merged || FRAME_ANCESTORS);
   next();
 });
 
@@ -20,6 +27,24 @@ app.get(['/', '/index.html'], (_req, res) => {
 });
 
 app.use(express.static(PUBLIC_DIR));
+
+app.use('/notion', express.static(NOTION_DIST_DIR, { extensions: ['html'] }));
+app.get(['/notion', '/notion/*'], (_req, res) => {
+  res.sendFile(path.join(NOTION_DIST_DIR, 'index.html'));
+});
+
+app.get('/notion/app', (req, res) => {
+  const token = (req.query.token || '').toString();
+  res
+    .type('html')
+    .send(`<!doctype html>
+  <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>OpenTrain Notion Editor</title>
+  <style>html,body,iframe{height:100%;width:100%;margin:0;border:0}</style></head>
+  <body><iframe src="/notion/?token=${encodeURIComponent(
+      token
+    )}" allow="clipboard-write *"></iframe></body></html>`);
+});
 
 const DOCSVC_URL = process.env.DOCSVC_URL || 'https://opentrain-docsvc.onrender.com';
 const DOCSVC_API_KEY = process.env.DOCSVC_API_KEY;

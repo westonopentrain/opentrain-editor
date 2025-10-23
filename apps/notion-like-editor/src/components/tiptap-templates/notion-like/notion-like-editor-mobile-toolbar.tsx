@@ -29,7 +29,6 @@ import { TextAlignButton } from "@/components/tiptap-ui/text-align-button"
 import { SlashCommandTriggerButton } from "@/components/tiptap-ui/slash-command-trigger-button"
 import { ResetAllFormattingButton } from "@/components/tiptap-ui/reset-all-formatting-button"
 import { DeleteNodeButton } from "@/components/tiptap-ui/delete-node-button"
-import { ImproveDropdown } from "@/components/tiptap-ui/improve-dropdown"
 import { CopyAnchorLinkButton } from "@/components/tiptap-ui/copy-anchor-link-button"
 import { TurnIntoDropdownContent } from "@/components/tiptap-ui/turn-into-dropdown"
 import { useRecentColors } from "@/components/tiptap-ui/color-text-popover"
@@ -587,7 +586,6 @@ function MainToolbarContent({
       {(hasSelection || hasContent) && (
         <>
           <ToolbarGroup>
-            <ImproveDropdown portal={true} hideWhenUnavailable />
           </ToolbarGroup>
 
           <ToolbarSeparator />

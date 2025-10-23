@@ -2,11 +2,14 @@ services:
   # 1) Editor shell from apps/editor
   - type: web
     name: opentrain-editor-shell
-    runtime: node
+    env: node
     rootDir: apps/editor
     plan: starter
-    buildCommand: "npm install"
-    startCommand: "npm start"
+    buildCommand: |
+      npm ci
+      cd ../notion-like-editor && npm ci && npm run build
+      cd ../editor
+    startCommand: npm start
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -22,6 +25,7 @@ services:
     buildFilter:
       paths:
         - apps/editor/**
+        - apps/notion-like-editor/**
 
   # 2) Node doc service from apps/docsvc
   - type: web
