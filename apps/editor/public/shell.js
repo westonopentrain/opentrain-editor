@@ -265,6 +265,10 @@ function createRow(doc, level) {
     row.classList.add('doc-row-child');
   }
 
+  const rowMain = document.createElement('div');
+  rowMain.className = 'doc-row-main';
+  row.appendChild(rowMain);
+
   if (!readOnly && !isRootDoc) {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', handleDragStart);
@@ -279,7 +283,7 @@ function createRow(doc, level) {
     handle.className = 'doc-handle';
     handle.textContent = '⋮⋮';
     handle.setAttribute('aria-hidden', 'true');
-    row.appendChild(handle);
+    rowMain.appendChild(handle);
   }
 
   const openBtn = document.createElement('button');
@@ -297,7 +301,7 @@ function createRow(doc, level) {
       });
     }
   });
-  row.appendChild(openBtn);
+  rowMain.appendChild(openBtn);
 
   if (!readOnly) {
     const actions = document.createElement('div');
@@ -354,7 +358,7 @@ function createRow(doc, level) {
     }
     actions.appendChild(deleteBtn);
 
-    row.appendChild(actions);
+    rowMain.appendChild(actions);
   }
 
   if (doc.id === currentDocId) {
