@@ -2,6 +2,14 @@ import { getDoc, upsertDoc, listDocsByJob, deleteDocCascade } from '../lib/store
 import { edjsToHtml, edjsToTiptap } from '../lib/converters.js';
 import { asString, isTiptapDoc } from '../lib/validate.js';
 
+function normalizeIconInput(value) {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return Array.from(trimmed).slice(0, 2).join('');
+}
+
 export async function docsRoutes(app) {
   // GET /docs/:id
   app.get('/:id', async (request, reply) => {
@@ -61,6 +69,13 @@ export async function docsRoutes(app) {
         return reply.code(413).send({ error: 'htmlSnapshot payload too large' });
       }
       payload.htmlSnapshot = body.htmlSnapshot;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'icon')) {
+      const iconValue = normalizeIconInput(body.icon);
+      if (iconValue !== undefined) {
+        payload.icon = iconValue;
+      }
     }
 
     const saved = await upsertDoc(id, payload);
