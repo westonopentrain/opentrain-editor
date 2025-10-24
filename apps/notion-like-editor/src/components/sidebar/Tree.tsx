@@ -482,8 +482,12 @@ export function Tree(props: TreeProps) {
       onSelect(node.id)
     }
 
-    const handleRenameClick = () => {
+    const handleRenameClick = async () => {
       if (!canEdit || actionPending) {
+        return
+      }
+      if (isEditing) {
+        await handleRenameSubmit(node, draftTitle)
         return
       }
       handleStartRename(node)
