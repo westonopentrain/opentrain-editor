@@ -146,7 +146,6 @@ export function EditorProvider(props: EditorProviderProps) {
   const extensions = React.useMemo(
     () => [
       StarterKit.configure({
-        undoRedo: false,
         horizontalRule: false,
         dropcursor: {
           width: 2,
