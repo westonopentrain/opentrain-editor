@@ -5,6 +5,7 @@ import multer from 'multer';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,13 @@ const upload = multer({
 });
 app.use(express.json({ limit: '2mb' }));
 app.use(cors());
+
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const NOTION_DIST_DIR = path.resolve(__dirname, '../notion-like-editor/dist');
 const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://www.opentrain.ai;';
@@ -259,22 +267,68 @@ app.get('/assets/:id', async (req, res) => {
 });
 
 app.get('/api/docs/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const scopeJobId = effectiveJobId(req.auth);
+  const requestId = req.requestId || randomUUID();
+  if (!scopeJobId) {
+    console.warn('[editor-shell] invalid scope for GET /api/docs', {
+      requestId,
+      docId: id,
+      auth: req.auth || null,
+    });
+    return res.status(400).json({ error: 'invalid_scope' });
+  }
+
+  const startedAt = Date.now();
+  console.info('[editor-shell] fetching document', {
+    requestId,
+    docId: id,
+    scopeJobId,
+    route: 'GET /api/docs/:id',
+  });
+
   try {
-    const scopeJobId = effectiveJobId(req.auth);
-    if (!scopeJobId) {
-      return res.status(400).json({ error: 'invalid_scope' });
-    }
-    const { id } = req.params;
     const doc = await docsvc(`/docs/${encodeURIComponent(id)}`, 'GET');
     if (doc && doc.jobId && doc.jobId !== scopeJobId) {
+      console.warn('[editor-shell] forbidden document access', {
+        requestId,
+        docId: id,
+        scopeJobId,
+        docJobId: doc.jobId,
+      });
       return res.status(403).json({ error: 'forbidden' });
     }
+
+    console.info('[editor-shell] document fetch complete', {
+      requestId,
+      docId: id,
+      scopeJobId,
+      durationMs: Date.now() - startedAt,
+      found: Boolean(doc),
+    });
+
     res.json(doc || {});
   } catch (err) {
-    if (err?.status === 404) {
+    const status = err?.status || 502;
+    if (status === 404) {
+      console.info('[editor-shell] document not found', {
+        requestId,
+        docId: id,
+        scopeJobId,
+        durationMs: Date.now() - startedAt,
+      });
       return res.status(404).json({ error: 'not_found' });
     }
-    res.status(err?.status || 502).json({ error: err.message });
+
+    console.error('[editor-shell] document fetch failed', {
+      requestId,
+      docId: id,
+      scopeJobId,
+      status,
+      message: err?.message || String(err),
+    });
+
+    res.status(status).json({ error: err.message });
   }
 });
 
@@ -282,16 +336,52 @@ app.put('/api/docs/:id', verifyToken, async (req, res) => {
   if (req.auth?.perms !== 'rw') {
     return res.status(403).json({ error: 'read_only' });
   }
+  const { id } = req.params;
+  const scopeJobId = effectiveJobId(req.auth);
+  const requestId = req.requestId || randomUUID();
+  if (!scopeJobId) {
+    console.warn('[editor-shell] invalid scope for PUT /api/docs', {
+      requestId,
+      docId: id,
+      auth: req.auth || null,
+    });
+    return res.status(400).json({ error: 'invalid_scope' });
+  }
+
+  const payload = { ...req.body, jobId: scopeJobId };
+  const htmlLength =
+    typeof payload.htmlSnapshot === 'string' ? payload.htmlSnapshot.length : null;
+  const startedAt = Date.now();
+
+  console.info('[editor-shell] updating document', {
+    requestId,
+    docId: id,
+    scopeJobId,
+    title: typeof payload.title === 'string' ? payload.title : null,
+    htmlLength,
+  });
+
   try {
-    const { id } = req.params;
-    const scopeJobId = effectiveJobId(req.auth);
-    if (!scopeJobId) {
-      return res.status(400).json({ error: 'invalid_scope' });
-    }
-    const payload = { ...req.body, jobId: scopeJobId };
     const saved = await docsvc(`/docs/${encodeURIComponent(id)}`, 'PUT', payload);
+
+    console.info('[editor-shell] document update complete', {
+      requestId,
+      docId: id,
+      scopeJobId,
+      durationMs: Date.now() - startedAt,
+      htmlLength,
+    });
+
     res.json(saved || {});
   } catch (err) {
+    console.error('[editor-shell] document update failed', {
+      requestId,
+      docId: id,
+      scopeJobId,
+      status: err?.status || 502,
+      message: err?.message || String(err),
+    });
+
     res.status(err?.status || 502).json({ error: err.message });
   }
 });
@@ -367,6 +457,12 @@ app.get('/api/scope/docs', verifyToken, async (req, res) => {
     if (!scopeJobId || !rootId) {
       return res.status(400).json({ error: 'invalid_scope' });
     }
+    const requestId = req.requestId || randomUUID();
+    console.info('[editor-shell] listing docs for scope', {
+      requestId,
+      scopeJobId,
+      rootId,
+    });
     const root = await ensureRootDoc(req.auth);
     let docs;
     try {
@@ -378,7 +474,13 @@ app.get('/api/scope/docs', verifyToken, async (req, res) => {
         throw err;
       }
     }
-    res.json(Array.isArray(docs) ? docs : []);
+    const normalized = Array.isArray(docs) ? docs : [];
+    console.info('[editor-shell] scope docs fetched', {
+      requestId,
+      scopeJobId,
+      count: normalized.length,
+    });
+    res.json(normalized);
   } catch (err) {
     res.status(502).json({ error: err.message || String(err) });
   }
