@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 
 import { NotionEditor } from './components/tiptap-templates/notion-like/notion-like-editor'
 import { Sidebar, type SidebarDoc } from './components/sidebar/Sidebar'
+import { uploadImage } from './lib/upload'
 
 const AUTOSAVE_DELAY_MS = 1200
 const DEFAULT_HTML = '<p></p>'
@@ -10,6 +11,29 @@ const DEFAULT_HTML = '<p></p>'
 const UNTITLED_TITLE = 'Untitled'
 
 const SESSION_EXPIRED_MESSAGE = 'Session expired — refresh this page.'
+
+function getEditorRootEl(): HTMLElement | null {
+  // TipTap renders a .ProseMirror element; select the first one in the editor pane
+  return document.querySelector('.ProseMirror') as HTMLElement | null
+}
+
+function getImageFilesFromDataTransfer(dt: DataTransfer): File[] {
+  const out: File[] = []
+  // prefer .files (works for paste and drop)
+  for (const f of Array.from(dt.files || [])) {
+    if (f && f.type && f.type.startsWith('image/')) out.push(f)
+  }
+  // some browsers expose images as items (pasted images)
+  if (out.length === 0 && dt.items) {
+    for (const it of Array.from(dt.items)) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile()
+        if (f && f.type.startsWith('image/')) out.push(f)
+      }
+    }
+  }
+  return out
+}
 
 type SaveState = 'loading' | 'saving' | 'saved' | 'error'
 
@@ -609,6 +633,119 @@ function App() {
 
     editor.commands.setContent(initialHtml, { emitUpdate: false })
   }, [initialHtml])
+
+  // --- Paste images
+  useEffect(() => {
+    const el = getEditorRootEl()
+    if (!el) return
+
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!editorRef.current) return
+      if (!tokenInfo || isReadOnly) return
+
+      const dt = e.clipboardData
+      if (!dt) return
+
+      const images = getImageFilesFromDataTransfer(dt)
+      if (!images.length) return
+
+      e.preventDefault()
+
+      setSaveState('saving')
+      try {
+        let oversize = false
+        for (const file of images) {
+          if (file.size > 10 * 1024 * 1024) {
+            oversize = true
+            continue
+          }
+          const { url } = await uploadImage(file)
+          editorRef.current
+            .chain()
+            .focus()
+            .setImage({ src: url, alt: file.name })
+            .run()
+        }
+        if (oversize) {
+          setSaveState('error')
+          setSaveError('Image exceeds 10MB limit.')
+        } else {
+          setSaveState('saved')
+          setSaveError(null)
+        }
+      } catch (err) {
+        console.error(err)
+        setSaveState('error')
+        setSaveError('Image upload failed.')
+      }
+    }
+
+    el.addEventListener('paste', onPaste as any)
+    return () => el.removeEventListener('paste', onPaste as any)
+  }, [tokenInfo, isReadOnly, activeDocId])
+
+  // --- Drag & Drop images
+  useEffect(() => {
+    const el = getEditorRootEl()
+    if (!el) return
+
+    const onDragOver = (e: DragEvent) => {
+      const dt = e.dataTransfer
+      if (!dt) return
+      const images = getImageFilesFromDataTransfer(dt)
+      if (images.length) {
+        e.preventDefault()
+        dt.dropEffect = 'copy'
+      }
+    }
+
+    const onDrop = async (e: DragEvent) => {
+      if (!editorRef.current) return
+      if (!tokenInfo || isReadOnly) return
+
+      const dt = e.dataTransfer
+      if (!dt) return
+      const images = getImageFilesFromDataTransfer(dt)
+      if (!images.length) return
+
+      e.preventDefault()
+
+      setSaveState('saving')
+      try {
+        let oversize = false
+        for (const file of images) {
+          if (file.size > 10 * 1024 * 1024) {
+            oversize = true
+            continue
+          }
+          const { url } = await uploadImage(file)
+          editorRef.current
+            .chain()
+            .focus()
+            .setImage({ src: url, alt: file.name })
+            .run()
+        }
+        if (oversize) {
+          setSaveState('error')
+          setSaveError('Image exceeds 10MB limit.')
+        } else {
+          setSaveState('saved')
+          setSaveError(null)
+        }
+      } catch (err) {
+        console.error(err)
+        setSaveState('error')
+        setSaveError('Image upload failed.')
+      }
+    }
+
+    el.addEventListener('dragover', onDragOver)
+    el.addEventListener('drop', onDrop)
+    return () => {
+      el.removeEventListener('dragover', onDragOver)
+      el.removeEventListener('drop', onDrop)
+    }
+  }, [tokenInfo, isReadOnly, activeDocId])
 
   const handleEditorCreate = useCallback(
     (editor: Editor) => {
