@@ -213,6 +213,10 @@ app.delete('/api/docs/:id', verifyToken, async (req, res) => {
   }
   try {
     const { id } = req.params;
+    const canonicalRoot = canonicalRootId(req.auth);
+    if (canonicalRoot && id === canonicalRoot) {
+      return res.status(400).json({ error: 'cannot_delete_root' });
+    }
     const scopeJobId = effectiveJobId(req.auth);
     if (!scopeJobId) {
       return res.status(400).json({ error: 'invalid_scope' });
@@ -292,52 +296,65 @@ app.post('/api/scope/pages', verifyToken, async (req, res) => {
   if (req.auth?.perms !== 'rw') {
     return res.status(403).json({ error: 'read_only' });
   }
-  const { title, rootId } = req.body || {};
-  const trimmedTitle = typeof title === 'string' ? title.trim() : '';
-  if (!trimmedTitle || !rootId) {
-    return res.status(400).json({ error: 'title and rootId required' });
-  }
+
   try {
     const scopeJobId = effectiveJobId(req.auth);
-    if (!scopeJobId) {
+    const canonicalRoot = canonicalRootId(req.auth);
+    if (!scopeJobId || !canonicalRoot) {
       return res.status(400).json({ error: 'invalid_scope' });
     }
-    const id = `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const { title, parentId, rootId } = req.body || {};
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    if (!trimmedTitle) {
+      return res.status(400).json({ error: 'title required' });
+    }
+
+    const ensuredRoot = await ensureRootDoc(req.auth);
+    const fallbackRootId = ensuredRoot?.id || canonicalRoot;
+    const targetParentId =
+      typeof parentId === 'string' && parentId.trim()
+        ? parentId.trim()
+        : typeof rootId === 'string' && rootId.trim()
+          ? rootId.trim()
+          : fallbackRootId;
+
+    if (!targetParentId) {
+      return res.status(400).json({ error: 'invalid_parent' });
+    }
 
     let position = 100;
     try {
       const docs = await docsvc(`/jobs/${encodeURIComponent(scopeJobId)}/docs`, 'GET');
       const siblings = Array.isArray(docs)
-        ? docs.filter((doc) => (doc.folderId ?? null) === (rootId ?? null))
+        ? docs.filter((d) => {
+            const folderId = typeof d?.folderId === 'string' ? d.folderId : null;
+            return folderId === targetParentId;
+          })
         : [];
       if (siblings.length) {
-        const max = Math.max(
-          ...siblings.map((doc) => {
-            const numeric = Number(doc?.position);
-            return Number.isFinite(numeric) ? numeric : 0;
-          })
-        );
-        position = max + 100;
+        position = Math.max(...siblings.map((d) => Number(d?.position) || 0)) + 100;
       }
     } catch (err) {
-      if (!err.status || err.status !== 404) {
-        throw err;
-      }
+      if (!err.status || err.status !== 404) throw err;
     }
 
+    const id = `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
       title: trimmedTitle,
       jobId: scopeJobId,
-      folderId: rootId,
+      folderId: targetParentId,
       position,
       htmlSnapshot: '<p></p>',
     };
+
     const doc = await docsvc(`/docs/${encodeURIComponent(id)}`, 'PUT', payload);
-    res.json(doc);
+    return res.json(doc);
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    return res.status(err?.status || 502).json({ error: err.message || String(err) });
   }
 });
+
 
 app.get('/api/jobs/:jobId/docs', verifyToken, async (req, res) => {
   const { jobId } = req.params;
