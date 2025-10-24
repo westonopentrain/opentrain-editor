@@ -179,7 +179,10 @@ app.get('/api/docs/:id', verifyToken, async (req, res) => {
     }
     res.json(doc || {});
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    if (err?.status === 404) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    res.status(err?.status || 502).json({ error: err.message });
   }
 });
 
@@ -197,7 +200,7 @@ app.put('/api/docs/:id', verifyToken, async (req, res) => {
     const saved = await docsvc(`/docs/${encodeURIComponent(id)}`, 'PUT', payload);
     res.json(saved || {});
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    res.status(err?.status || 502).json({ error: err.message });
   }
 });
 
@@ -243,7 +246,7 @@ app.delete('/api/docs/:id', verifyToken, async (req, res) => {
     const payload = await delResp.json().catch(() => ({}));
     res.json(payload || {});
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    res.status(err?.status || 502).json({ error: err.message });
   }
 });
 
