@@ -102,6 +102,29 @@ export function Tree(props: TreeProps) {
     [rootDoc, childrenMap]
   )
 
+  const depthMap = useMemo(() => {
+    const map = new Map<string, number>()
+    const stack: Array<{ node: SidebarDoc; depth: number }> = []
+    roots.forEach((node) => {
+      stack.push({ node, depth: 0 })
+    })
+
+    while (stack.length > 0) {
+      const { node, depth } = stack.pop()!
+      const existingDepth = map.get(node.id)
+      if (existingDepth !== undefined && existingDepth <= depth) {
+        continue
+      }
+      map.set(node.id, depth)
+      const children = childrenMap.get(node.id) ?? []
+      children.forEach((child) => {
+        stack.push({ node: child, depth: depth + 1 })
+      })
+    }
+
+    return map
+  }, [roots, childrenMap])
+
   useEffect(() => {
     if (!editingId) {
       return
@@ -231,12 +254,18 @@ export function Tree(props: TreeProps) {
       if (parentId === dragId) {
         return false
       }
+      if (parentId) {
+        const parentDepth = depthMap.get(parentId) ?? 0
+        if (parentDepth >= 1) {
+          return false
+        }
+      }
       if (wouldCreateCycle(dragId, parentId)) {
         return false
       }
       return true
     },
-    [wouldCreateCycle]
+    [depthMap, wouldCreateCycle]
   )
 
   const canDropAlongside = useCallback(
@@ -389,8 +418,10 @@ export function Tree(props: TreeProps) {
       onSelect(node.id)
     }
 
+    const canCreateChild = depth < 1
+
     const handleCreateChild = () => {
-      if (!canEdit || actionPending) {
+      if (!canEdit || actionPending || !canCreateChild) {
         return
       }
       void onCreate(node.id)
@@ -620,8 +651,10 @@ export function Tree(props: TreeProps) {
                 type="button"
                 className="notion-sidebar-tree__action"
                 onClick={handleCreateChild}
-                disabled={actionPending}
-                title="Add subpage"
+                disabled={actionPending || !canCreateChild}
+                title={
+                  canCreateChild ? 'Add subpage' : 'Only one subpage level is supported'
+                }
               >
                 +
               </button>
