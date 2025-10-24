@@ -36,7 +36,7 @@
 .notion-sidebar__create-button {
   border: 1px solid var(--tt-border-color, rgba(17, 24, 39, 0.08));
   background-color: var(--tt-card-bg-color, #ffffff);
-  color: var(--tt-brand-color-600, #4b0082);
+  color: var(--tt-brand-color-600, #184adf);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.3rem 0.75rem;
@@ -49,8 +49,8 @@
 }
 
 .notion-sidebar__create-button:hover:not(:disabled) {
-  background-color: var(--tt-brand-color-50, #efefff);
-  border-color: var(--tt-brand-color-200, #c3bdff);
+  background-color: var(--tt-brand-color-50, #e9f0ff);
+  border-color: var(--tt-brand-color-200, #a6c1ff);
 }
 
 .notion-sidebar__create-button:disabled {
@@ -131,7 +131,7 @@
   position: absolute;
   left: 1rem;
   right: 1rem;
-  border-top: 2px solid var(--tt-brand-color-400, #7a52ff);
+  border-top: 2px solid var(--tt-brand-color-400, #4f84ff);
   border-radius: var(--tt-radius-sm, 0.375rem);
 }
 
@@ -144,7 +144,7 @@
 }
 
 .notion-sidebar-tree__item.is-active {
-  background-color: var(--tt-brand-color-600, #4b0082);
+  background-color: var(--tt-brand-color-500, #1f5afa);
   color: var(--Base-White, #fff);
 }
 
@@ -174,11 +174,11 @@
 
 .notion-sidebar-tree__toggle:hover {
   background-color: var(--tt-border-color-tint, rgba(17, 24, 39, 0.06));
-  color: var(--tt-brand-color-600, #4b0082);
+  color: var(--tt-brand-color-600, #184adf);
 }
 
 .notion-sidebar-tree__toggle:focus-visible {
-  outline: 2px solid var(--tt-brand-color-300, #a58bff);
+  outline: 2px solid var(--tt-brand-color-300, #7aa2ff);
   outline-offset: 2px;
 }
 
@@ -224,8 +224,8 @@
 
 .notion-sidebar-tree__input:focus {
   outline: none;
-  border-color: var(--tt-brand-color-400, #7a52ff);
-  box-shadow: 0 0 0 1px var(--tt-brand-color-200, #c3bdff);
+  border-color: var(--tt-brand-color-400, #4f84ff);
+  box-shadow: 0 0 0 1px var(--tt-brand-color-200, #a6c1ff);
 }
 
 .notion-sidebar-tree__actions {
@@ -233,6 +233,20 @@
   align-items: center;
   gap: 0.5rem;
   margin-left: auto;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--tt-transition-duration-default, 0.2s)
+      var(--tt-transition-easing-default, ease),
+    visibility var(--tt-transition-duration-default, 0.2s)
+      var(--tt-transition-easing-default, ease);
+}
+
+.notion-sidebar-tree__item:hover .notion-sidebar-tree__actions,
+.notion-sidebar-tree__item:focus-within .notion-sidebar-tree__actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .notion-sidebar-tree__icon-button {
@@ -253,7 +267,7 @@
 }
 
 .notion-sidebar-tree__icon-button:hover:not(:disabled) {
-  color: var(--tt-brand-color-600, #4b0082);
+  color: var(--tt-brand-color-600, #184adf);
 }
 
 .notion-sidebar-tree__icon-button:disabled {
@@ -302,9 +316,9 @@
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px dashed var(--tt-brand-color-300, #a58bff);
+  border: 1px dashed var(--tt-brand-color-300, #7aa2ff);
   border-radius: var(--tt-radius-sm, 0.375rem);
-  background-color: rgba(122, 82, 255, 0.12);
+  background-color: rgba(31, 90, 250, 0.12);
   pointer-events: none;
   z-index: -1;
 }
@@ -323,9 +337,9 @@
 }
 
 .notion-sidebar-tree__root-drop.is-drop-target {
-  border-color: var(--tt-brand-color-300, #a58bff);
-  background-color: var(--tt-brand-color-50, #efefff);
-  color: var(--tt-brand-color-700, #4b00cc);
+  border-color: var(--tt-brand-color-300, #7aa2ff);
+  background-color: var(--tt-brand-color-50, #e9f0ff);
+  color: var(--tt-brand-color-700, #1339a9);
 }
 
 @media (max-width: 900px) {

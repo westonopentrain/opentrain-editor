@@ -10,24 +10,6 @@ import type { SidebarDoc } from './Sidebar'
 
 const ICON_SIZE = 20
 
-const AddIcon = () => (
-  <svg
-    width={ICON_SIZE}
-    height={ICON_SIZE}
-    viewBox="0 0 24 24"
-    fill="none"
-    aria-hidden
-  >
-    <path
-      d="M12 5v14M5 12h14"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
 const EditIcon = () => (
   <svg
     width={ICON_SIZE}
@@ -100,7 +82,6 @@ interface TreeProps {
   disableNavigation: boolean
   actionPending: boolean
   onSelect: (docId: string) => void
-  onCreate: (parentId: string | null) => Promise<void> | void
   onRename: (docId: string, title: string) => Promise<boolean>
   onDelete: (docId: string) => Promise<boolean>
   onMove: (
@@ -126,7 +107,6 @@ export function Tree(props: TreeProps) {
     disableNavigation,
     actionPending,
     onSelect,
-    onCreate,
     onRename,
     onDelete,
     onMove,
@@ -502,15 +482,6 @@ export function Tree(props: TreeProps) {
       onSelect(node.id)
     }
 
-    const canCreateChild = depth < 1
-
-    const handleCreateChild = () => {
-      if (!canEdit || actionPending || !canCreateChild) {
-        return
-      }
-      void onCreate(node.id)
-    }
-
     const handleRenameClick = () => {
       if (!canEdit || actionPending) {
         return
@@ -732,24 +703,6 @@ export function Tree(props: TreeProps) {
             )}
             {canEdit ? (
               <div className="notion-sidebar-tree__actions">
-                <button
-                  type="button"
-                  className="notion-sidebar-tree__icon-button"
-                  onClick={handleCreateChild}
-                  disabled={actionPending || !canCreateChild}
-                  title={
-                    canCreateChild
-                      ? 'Add subpage'
-                      : 'Only one subpage level is supported'
-                  }
-                  aria-label={
-                    canCreateChild
-                      ? 'Add subpage'
-                      : 'Only one subpage level is supported'
-                  }
-                >
-                  <AddIcon />
-                </button>
                 <button
                   type="button"
                   className="notion-sidebar-tree__icon-button"

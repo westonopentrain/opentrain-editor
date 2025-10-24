@@ -94,7 +94,6 @@ export function Sidebar(props: SidebarProps) {
             disableNavigation={disableNavigation}
             actionPending={actionPending}
             onSelect={onSelect}
-            onCreate={onCreate}
             onRename={onRename}
             onDelete={onDelete}
             onMove={onMove}
