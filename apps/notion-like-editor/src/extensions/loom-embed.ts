@@ -1,4 +1,5 @@
 import { Node, mergeAttributes, nodePasteRule } from "@tiptap/core"
+import { Plugin } from "@tiptap/pm/state"
 
 /**
  * Matches common Loom URLs:
@@ -115,6 +116,44 @@ export const LoomEmbed = Node.create({
           const full = match[0]
           const embed = toEmbedUrl(full)
           return embed ? { src: embed, url: full } : false
+        },
+      }),
+    ]
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handlePaste: (view, event) => {
+            const text = event.clipboardData?.getData("text/plain")?.trim()
+            if (!text) {
+              return false
+            }
+
+            const match = text.match(LOOM_URL_RE)
+            if (!match || match[0].trim() !== text) {
+              return false
+            }
+
+            const embed = toEmbedUrl(match[0])
+            if (!embed) {
+              return false
+            }
+
+            if (this.editor && this.editor.commands.setLoomEmbed(text)) {
+              event.preventDefault()
+              return true
+            }
+
+            const { state } = view
+            const node = this.type.create({ src: embed, url: text })
+            const tr = state.tr.replaceSelectionWith(node, false).scrollIntoView()
+
+            event.preventDefault()
+            view.dispatch(tr)
+            return true
+          },
         },
       }),
     ]

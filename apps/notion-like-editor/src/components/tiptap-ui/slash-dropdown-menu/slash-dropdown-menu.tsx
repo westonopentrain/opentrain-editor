@@ -15,6 +15,7 @@ import { SuggestionMenu } from "@/components/tiptap-ui-utils/suggestion-menu"
 // --- Hooks ---
 import type { SlashMenuConfig } from "@/components/tiptap-ui/slash-dropdown-menu/use-slash-dropdown-menu"
 import { useSlashDropdownMenu } from "@/components/tiptap-ui/slash-dropdown-menu/use-slash-dropdown-menu"
+import { useLoomUrlPrompt } from "@/components/tiptap-ui/slash-dropdown-menu/loom-url-prompt"
 
 // --- UI Primitives ---
 import { Button, ButtonGroup } from "@/components/tiptap-ui-primitive/button"
@@ -37,22 +38,34 @@ type SlashDropdownMenuProps = Omit<
 
 export const SlashDropdownMenu = (props: SlashDropdownMenuProps) => {
   const { config, ...restProps } = props
-  const { getSlashMenuItems } = useSlashDropdownMenu(config)
+  const { requestLoomUrl, promptNode } = useLoomUrlPrompt()
+
+  const enhancedConfig = React.useMemo<SlashMenuConfig | undefined>(() => {
+    if (!config) {
+      return { onRequestLoomUrl: requestLoomUrl }
+    }
+    return { ...config, onRequestLoomUrl: requestLoomUrl }
+  }, [config, requestLoomUrl])
+
+  const { getSlashMenuItems } = useSlashDropdownMenu(enhancedConfig)
 
   return (
-    <SuggestionMenu
-      char="/"
-      pluginKey="slashDropdownMenu"
-      decorationClass="tiptap-slash-decoration"
-      decorationContent="Filter..."
-      selector="tiptap-slash-dropdown-menu"
-      items={({ query, editor }) =>
-        filterSuggestionItems(getSlashMenuItems(editor), query)
-      }
-      {...restProps}
-    >
-      {(props) => <List {...props} config={config} />}
-    </SuggestionMenu>
+    <>
+      <SuggestionMenu
+        char="/"
+        pluginKey="slashDropdownMenu"
+        decorationClass="tiptap-slash-decoration"
+        decorationContent="Filter..."
+        selector="tiptap-slash-dropdown-menu"
+        items={({ query, editor }) =>
+          filterSuggestionItems(getSlashMenuItems(editor), query)
+        }
+        {...restProps}
+      >
+        {(props) => <List {...props} config={enhancedConfig} />}
+      </SuggestionMenu>
+      {promptNode}
+    </>
   )
 }
 
