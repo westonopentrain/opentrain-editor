@@ -391,6 +391,8 @@ function App() {
   const saveTimerRef = useRef<number | null>(null)
   const activeDocIdRef = useRef<string | null>(null)
   const rootIdRef = useRef<string | null>(null)
+  const docsByIdRef = useRef<Map<string, SidebarDoc>>(new Map())
+  const activeDocMetaRef = useRef<SidebarDoc | null>(null)
 
   useEffect(() => {
     return () => {
@@ -407,6 +409,21 @@ function App() {
   useEffect(() => {
     rootIdRef.current = rootId
   }, [rootId])
+
+  useEffect(() => {
+    docsByIdRef.current = new Map(docs.map((doc) => [doc.id, doc]))
+  }, [docs])
+
+  useEffect(() => {
+    const currentId = activeDocIdRef.current
+    if (!currentId) {
+      activeDocMetaRef.current = null
+      return
+    }
+
+    const nextMeta = docsByIdRef.current.get(currentId) ?? null
+    activeDocMetaRef.current = nextMeta
+  }, [docs, activeDocId])
 
   useEffect(() => {
     if (!tokenInfo) {
@@ -785,16 +802,32 @@ function App() {
 
       saveTimerRef.current = window.setTimeout(async () => {
         try {
+          let docMeta = activeDocMetaRef.current
+          if (!docMeta) {
+            docMeta = docsByIdRef.current.get(currentDocId) ?? null
+            if (docMeta) {
+              activeDocMetaRef.current = docMeta
+            } else {
+              console.warn('Autosave missing sidebar metadata for doc', {
+                docId: currentDocId,
+              })
+            }
+          }
+          const payload: Record<string, unknown> = {
+            htmlSnapshot: html,
+          }
+
+          if (docMeta && docMeta.title.trim().length > 0) {
+            payload.title = docMeta.title
+          }
+
           const response = await fetch(`/api/docs/${encodeURIComponent(currentDocId)}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${tokenInfo.token}`,
             },
-            body: JSON.stringify({
-              title: 'OpenTrain autosave',
-              htmlSnapshot: html,
-            }),
+            body: JSON.stringify(payload),
           })
 
           if (response.status === 401) {
