@@ -8,6 +8,90 @@ import type {
 
 import type { SidebarDoc } from './Sidebar'
 
+const ICON_SIZE = 20
+
+const AddIcon = () => (
+  <svg
+    width={ICON_SIZE}
+    height={ICON_SIZE}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <path
+      d="M12 5v14M5 12h14"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const EditIcon = () => (
+  <svg
+    width={ICON_SIZE}
+    height={ICON_SIZE}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <path
+      d="m5 17.5-.5 3.5 3.5-.5 10-10-3-3-10 10Z"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="m14.5 7 2 2 1.88-1.88a1.5 1.5 0 0 0 0-2.12L16.99 2.5a1.5 1.5 0 0 0-2.12 0L13 4.38"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const DeleteIcon = () => (
+  <svg
+    width={ICON_SIZE}
+    height={ICON_SIZE}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <path
+      d="M5 7h14"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 7V5.5a2.5 2.5 0 0 1 2.5-2.5h1A2.5 2.5 0 0 1 15 5.5V7"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 11v6M12 11v6M15 11v6"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M7 7h10v11.5A2.5 2.5 0 0 1 14.5 21h-5A2.5 2.5 0 0 1 7 18.5V7Z"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 interface TreeProps {
   docs: SidebarDoc[]
   rootId: string | null
@@ -374,7 +458,7 @@ export function Tree(props: TreeProps) {
     const isActive = activeDocId === node.id
     const isEditing = editingId === node.id
     const nodeTitle = isEditing ? draftTitle : node.title
-    const indent = `${0.75 + depth * 0.75}rem`
+    const indent = `${1 + depth * 0.75}rem`
     const childNodes = childrenMap.get(node.id) ?? []
     const isCollapsible = childNodes.length > 0
     const isCollapsed = isCollapsible && collapsedIds.has(node.id)
@@ -605,83 +689,98 @@ export function Tree(props: TreeProps) {
           onDragLeave={allowDrag ? handleDragLeaveItem : undefined}
           onDrop={allowDrag ? handleDropOnItem : undefined}
         >
-          {isCollapsible ? (
-            <button
-              type="button"
-              className={`notion-sidebar-tree__toggle${
-                isCollapsed ? ' is-collapsed' : ''
-              }`}
-              onClick={() => toggleCollapsed(node.id)}
-              aria-label={
-                isCollapsed ? 'Expand subpages' : 'Collapse subpages'
-              }
-              aria-expanded={!isCollapsed}
-              onMouseDown={(event: MouseEvent<HTMLButtonElement>) => {
-                event.stopPropagation()
-              }}
-            >
-              <span aria-hidden>{isCollapsed ? '▸' : '▾'}</span>
-            </button>
-          ) : (
-            <span className="notion-sidebar-tree__toggle notion-sidebar-tree__toggle--spacer" />
-          )}
-          {isEditing ? (
-            <input
-              className="notion-sidebar-tree__input"
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              onKeyDown={handleInputKeyDown}
-              onBlur={handleBlur}
-              autoFocus
-            />
-          ) : (
-            <button
-              type="button"
-              className="notion-sidebar-tree__title"
-              onClick={handleSelect}
-              disabled={disableNavigation}
-              title={node.title}
-            >
-              {nodeTitle}
-            </button>
-          )}
-          {canEdit ? (
-            <div className="notion-sidebar-tree__actions">
+          <div className="notion-sidebar-tree__item-row">
+            {isCollapsible ? (
               <button
                 type="button"
-                className="notion-sidebar-tree__action"
-                onClick={handleCreateChild}
-                disabled={actionPending || !canCreateChild}
-                title={
-                  canCreateChild ? 'Add subpage' : 'Only one subpage level is supported'
+                className={`notion-sidebar-tree__toggle${
+                  isCollapsed ? ' is-collapsed' : ''
+                }`}
+                onClick={() => toggleCollapsed(node.id)}
+                aria-label={
+                  isCollapsed ? 'Expand subpages' : 'Collapse subpages'
                 }
+                aria-expanded={!isCollapsed}
+                onMouseDown={(event: MouseEvent<HTMLButtonElement>) => {
+                  event.stopPropagation()
+                }}
               >
-                +
+                <span aria-hidden>{isCollapsed ? '▸' : '▾'}</span>
               </button>
+            ) : (
+              <span className="notion-sidebar-tree__toggle notion-sidebar-tree__toggle--spacer" />
+            )}
+            {isEditing ? (
+              <input
+                className="notion-sidebar-tree__input"
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                onKeyDown={handleInputKeyDown}
+                onBlur={handleBlur}
+                autoFocus
+              />
+            ) : (
               <button
                 type="button"
-                className="notion-sidebar-tree__action"
-                onClick={handleRenameClick}
-                disabled={actionPending}
-                title="Rename page"
+                className="notion-sidebar-tree__title"
+                onClick={handleSelect}
+                disabled={disableNavigation}
+                title={node.title}
               >
-                ✎
+                {nodeTitle}
               </button>
-              <button
-                type="button"
-                className="notion-sidebar-tree__action"
-                onClick={handleDeleteClick}
-                disabled={actionPending || node.id === rootId}
-                title={
-                  node.id === rootId
-                    ? 'Root page cannot be deleted'
-                    : 'Delete page'
-                }
-              >
-                🗑
-              </button>
-            </div>
-          ) : null}
+            )}
+            {canEdit ? (
+              <div className="notion-sidebar-tree__actions">
+                <button
+                  type="button"
+                  className="notion-sidebar-tree__icon-button"
+                  onClick={handleCreateChild}
+                  disabled={actionPending || !canCreateChild}
+                  title={
+                    canCreateChild
+                      ? 'Add subpage'
+                      : 'Only one subpage level is supported'
+                  }
+                  aria-label={
+                    canCreateChild
+                      ? 'Add subpage'
+                      : 'Only one subpage level is supported'
+                  }
+                >
+                  <AddIcon />
+                </button>
+                <button
+                  type="button"
+                  className="notion-sidebar-tree__icon-button"
+                  onClick={handleRenameClick}
+                  disabled={actionPending}
+                  title="Rename page"
+                  aria-label="Rename page"
+                >
+                  <EditIcon />
+                </button>
+                <button
+                  type="button"
+                  className="notion-sidebar-tree__icon-button"
+                  onClick={handleDeleteClick}
+                  disabled={actionPending || node.id === rootId}
+                  title={
+                    node.id === rootId
+                      ? 'Root page cannot be deleted'
+                      : 'Delete page'
+                  }
+                  aria-label={
+                    node.id === rootId
+                      ? 'Root page cannot be deleted'
+                      : 'Delete page'
+                  }
+                >
+                  <DeleteIcon />
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div
           className={childrenClassName}
