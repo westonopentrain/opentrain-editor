@@ -1,23 +1,31 @@
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 app.use(express.json({ limit: '2mb' }));
 app.use(cors());
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const NOTION_DIST_DIR = path.resolve(__dirname, '../notion-like-editor/dist');
 const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://www.opentrain.ai;';
+const IMG_SRC = "img-src 'self' data: blob:;";
+const CSP_DIRECTIVES = `${FRAME_ANCESTORS} ${IMG_SRC}`;
 
 app.use((req, res, next) => {
   const existing = res.getHeader('Content-Security-Policy');
-  const merged = [existing, FRAME_ANCESTORS].filter(Boolean).join(' ');
-  res.setHeader('Content-Security-Policy', merged || FRAME_ANCESTORS);
+  const merged = [existing, CSP_DIRECTIVES].filter(Boolean).join(' ');
+  res.setHeader('Content-Security-Policy', merged || CSP_DIRECTIVES);
   next();
 });
 
@@ -165,6 +173,87 @@ async function ensureRootDoc(auth) {
   const payload = { title: 'Instructions', jobId: scopeJobId, position: 0, htmlSnapshot: '<p></p>' };
   return docsvc(`/docs/${encodeURIComponent(canonicalId)}`, 'PUT', payload);
 }
+
+app.post('/api/assets', verifyToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'file_required' });
+    }
+
+    if (!DOCSVC_API_KEY) {
+      throw new Error('DOCSVC_API_KEY env var is required');
+    }
+
+    const scopeJobId = effectiveJobId(req.auth) || null;
+    const { originalname, mimetype, buffer, size } = req.file;
+    const filename = originalname || 'upload';
+    const contentType = mimetype || 'application/octet-stream';
+
+    const form = new FormData();
+    const blob = new Blob([buffer], { type: contentType });
+    form.append('file', blob, filename);
+    if (scopeJobId) form.append('jobId', scopeJobId);
+    if (req.auth?.folderId) form.append('folderId', req.auth.folderId);
+    if (req.auth?.docId) form.append('docId', req.auth.docId);
+
+    const resp = await fetch(`${DOCSVC_URL}/assets`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${DOCSVC_API_KEY}` },
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(`docsvc assets POST -> ${resp.status}: ${txt}`);
+    }
+
+    const payload = await resp.json().catch(() => ({}));
+    const id = payload?.id;
+    if (!id) {
+      return res.status(502).json({ error: 'invalid_asset_response' });
+    }
+
+    const url = `/assets/${encodeURIComponent(id)}`;
+    return res.json({ id, url, filename, mimetype: contentType, size });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(502).json({ error: message });
+  }
+});
+
+app.get('/assets/:id', async (req, res) => {
+  try {
+    const upstream = await fetch(
+      `${DOCSVC_URL}/assets/${encodeURIComponent(req.params.id)}`
+    );
+    if (!upstream.ok) {
+      return res.sendStatus(upstream.status);
+    }
+
+    res.set(
+      'Content-Type',
+      upstream.headers.get('content-type') || 'application/octet-stream'
+    );
+    res.set(
+      'Cache-Control',
+      upstream.headers.get('cache-control') || 'public, max-age=31536000, immutable'
+    );
+
+    const body = upstream.body;
+    if (!body) {
+      return res.sendStatus(502);
+    }
+
+    if (typeof body.pipe === 'function') {
+      body.pipe(res);
+      return;
+    }
+
+    return Readable.fromWeb(body).pipe(res);
+  } catch (err) {
+    return res.sendStatus(502);
+  }
+});
 
 app.get('/api/docs/:id', verifyToken, async (req, res) => {
   try {
