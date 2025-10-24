@@ -32,6 +32,7 @@ import { useScrollToHash } from "@/components/tiptap-ui/copy-anchor-link-button/
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import { UiState } from "@/components/tiptap-extension/ui-state-extension"
 import { Image } from "@/components/tiptap-node/image-node/image-node-extension"
+import LoomEmbed from "@/extensions/loom-embed"
 
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
@@ -172,6 +173,7 @@ export function EditorProvider(props: EditorProviderProps) {
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       Selection,
+      LoomEmbed,
       Image,
       ImageUploadNode.configure({
         accept: "image/*",

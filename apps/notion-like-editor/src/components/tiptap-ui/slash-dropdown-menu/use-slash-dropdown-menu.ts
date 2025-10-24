@@ -17,6 +17,7 @@ import { MinusIcon } from "@/components/tiptap-icons/minus-icon"
 import { TypeIcon } from "@/components/tiptap-icons/type-icon"
 import { AtSignIcon } from "@/components/tiptap-icons/at-sign-icon"
 import { SmilePlusIcon } from "@/components/tiptap-icons/smile-plus-icon"
+import { MessageSquareIcon } from "@/components/tiptap-icons/message-square-icon"
 
 // --- Lib ---
 import {
@@ -126,6 +127,13 @@ const texts = {
     badge: MinusIcon,
     group: "Insert",
   },
+  loom: {
+    title: "Loom",
+    subtext: "Embed a Loom video",
+    keywords: ["loom", "video", "embed"],
+    badge: MessageSquareIcon,
+    group: "Insert",
+  },
 
   // Upload
   image: {
@@ -220,6 +228,24 @@ const getItemImplementations = () => {
       check: (editor: Editor) => isNodeInSchema("horizontalRule", editor),
       action: ({ editor }: { editor: Editor }) => {
         editor.chain().focus().setHorizontalRule().run()
+      },
+    },
+    loom: {
+      check: (editor: Editor) => isNodeInSchema("loomEmbed", editor),
+      action: ({ editor }: { editor: Editor }) => {
+        if (!editor.isEditable) {
+          return
+        }
+
+        const url = window.prompt("Paste Loom URL")?.trim()
+        if (!url) {
+          return
+        }
+
+        const ok = editor.commands.setLoomEmbed(url)
+        if (!ok) {
+          window.alert("That does not look like a Loom URL.")
+        }
       },
     },
 

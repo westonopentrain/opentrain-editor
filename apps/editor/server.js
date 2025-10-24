@@ -20,11 +20,11 @@ const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const NOTION_DIST_DIR = path.resolve(__dirname, '../notion-like-editor/dist');
 const FRAME_ANCESTORS = 'frame-ancestors https://*.bubbleapps.io https://www.opentrain.ai;';
 const IMG_SRC = "img-src 'self' data: blob:;";
-const CSP_DIRECTIVES = `${FRAME_ANCESTORS} ${IMG_SRC}`;
+const FRAME_SRC = "frame-src 'self' https://www.loom.com https://loom.com;";
 
 app.use((req, res, next) => {
   const existing = (res.getHeader('Content-Security-Policy') || '').toString();
-  const full = [existing, FRAME_ANCESTORS, IMG_SRC]
+  const full = [existing, FRAME_ANCESTORS, IMG_SRC, FRAME_SRC]
     .filter(Boolean)
     .join(' ')
     .trim();
