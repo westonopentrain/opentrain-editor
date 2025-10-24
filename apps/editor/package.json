@@ -5,6 +5,9 @@
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@tiptap/core": "2.1.7",
     "@tiptap/extension-bubble-menu": "2.1.7",

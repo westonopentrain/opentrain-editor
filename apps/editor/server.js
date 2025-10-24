@@ -23,9 +23,12 @@ const IMG_SRC = "img-src 'self' data: blob:;";
 const CSP_DIRECTIVES = `${FRAME_ANCESTORS} ${IMG_SRC}`;
 
 app.use((req, res, next) => {
-  const existing = res.getHeader('Content-Security-Policy');
-  const merged = [existing, CSP_DIRECTIVES].filter(Boolean).join(' ');
-  res.setHeader('Content-Security-Policy', merged || CSP_DIRECTIVES);
+  const existing = (res.getHeader('Content-Security-Policy') || '').toString();
+  const full = [existing, FRAME_ANCESTORS, IMG_SRC]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  res.setHeader('Content-Security-Policy', full);
   next();
 });
 
