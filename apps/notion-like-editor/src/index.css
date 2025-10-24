@@ -79,3 +79,27 @@ body {
   max-width: 24rem;
   font-size: 0.95rem;
 }
+
+/* Responsive 16:9 Loom embed container */
+.embed-loom {
+  position: relative;
+  width: 100%;
+}
+.embed-loom::before {
+  content: "";
+  display: block;
+  padding-top: 56.25%; /* 16:9 */
+}
+.embed-loom > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Ensure images/videos never overflow */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+}
