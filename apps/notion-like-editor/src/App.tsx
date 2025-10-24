@@ -212,6 +212,119 @@ function collectDescendantIds(docs: SidebarDoc[], docId: string): Set<string> {
   return result
 }
 
+interface MoveUpdate {
+  id: string
+  position: number
+  parentId: string | null
+}
+
+interface MoveResult {
+  nextDocs: SidebarDoc[]
+  updates: MoveUpdate[]
+}
+
+function applyMove(
+  docs: SidebarDoc[],
+  docId: string,
+  targetParentId: string | null,
+  targetIndex: number
+): MoveResult | null {
+  const doc = docs.find((item) => item.id === docId)
+  if (!doc) {
+    return null
+  }
+
+  const normalizedTargetParent = targetParentId ?? null
+  if (normalizedTargetParent === docId) {
+    return null
+  }
+
+  const descendants = collectDescendantIds(docs, docId)
+  if (normalizedTargetParent && descendants.has(normalizedTargetParent)) {
+    return null
+  }
+
+  const currentParent = doc.parentId ?? null
+  const siblings = docs.filter(
+    (item) => (item.parentId ?? null) === currentParent
+  )
+  const currentIndex = siblings.findIndex((item) => item.id === docId)
+  if (currentIndex === -1) {
+    return null
+  }
+
+  const targetSiblingsBase = docs.filter(
+    (item) => (item.parentId ?? null) === normalizedTargetParent
+  )
+  const targetLength = targetSiblingsBase.length
+  const clampedIndex = Math.max(
+    0,
+    Math.min(Math.floor(targetIndex), targetLength)
+  )
+
+  let insertIndex = clampedIndex
+  if (normalizedTargetParent === currentParent && currentIndex < insertIndex) {
+    insertIndex -= 1
+  }
+  if (insertIndex < 0) {
+    insertIndex = 0
+  }
+
+  const nextDocs = docs.map((item) => ({ ...item }))
+  const docCopy = nextDocs.find((item) => item.id === docId)
+  if (!docCopy) {
+    return null
+  }
+
+  const targetSiblings = nextDocs.filter(
+    (item) => (item.parentId ?? null) === normalizedTargetParent && item.id !== docId
+  )
+  if (insertIndex > targetSiblings.length) {
+    insertIndex = targetSiblings.length
+  }
+
+  if (normalizedTargetParent === currentParent && insertIndex === currentIndex) {
+    return null
+  }
+
+  targetSiblings.splice(insertIndex, 0, docCopy)
+
+  const updateMap = new Map<string, MoveUpdate>()
+
+  const assignPositions = (
+    list: SidebarDoc[],
+    parentId: string | null
+  ) => {
+    list.forEach((item, index) => {
+      const nextPosition = (index + 1) * 100
+      const existingParent = item.parentId ?? null
+      if (
+        item.position !== nextPosition ||
+        existingParent !== parentId
+      ) {
+        item.position = nextPosition
+        item.parentId = parentId
+        updateMap.set(item.id, {
+          id: item.id,
+          position: nextPosition,
+          parentId,
+        })
+      }
+    })
+  }
+
+  assignPositions(targetSiblings, normalizedTargetParent)
+
+  if (normalizedTargetParent !== currentParent) {
+    const oldSiblings = nextDocs.filter(
+      (item) => (item.parentId ?? null) === currentParent && item.id !== docId
+    )
+    assignPositions(oldSiblings, currentParent)
+  }
+
+  return { nextDocs, updates: Array.from(updateMap.values()) }
+}
+
 function App() {
   const tokenResult = useMemo<TokenParseResult>(() => {
     if (typeof window === 'undefined') {
@@ -744,6 +857,88 @@ function App() {
     [tokenInfo, isReadOnly, docs]
   )
 
+  const handleMovePage = useCallback(
+    async (
+      docId: string,
+      targetParentId: string | null,
+      targetIndex: number
+    ): Promise<boolean> => {
+      if (!tokenInfo || isReadOnly) {
+        return false
+      }
+
+      const moveResult = applyMove(docs, docId, targetParentId, targetIndex)
+      if (!moveResult) {
+        return false
+      }
+
+      setDocs(moveResult.nextDocs)
+
+      if (!moveResult.updates.length) {
+        return true
+      }
+      setSidebarError(null)
+      setSidebarActionPending(true)
+
+      try {
+        for (const update of moveResult.updates) {
+          const response = await fetch(
+            `/api/docs/${encodeURIComponent(update.id)}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${tokenInfo.token}`,
+              },
+              body: JSON.stringify({
+                position: update.position,
+                folderId: update.parentId,
+              }),
+            }
+          )
+
+          if (response.status === 401) {
+            setSessionExpired(true)
+            setSidebarError(SESSION_EXPIRED_MESSAGE)
+            await refreshDocs()
+            return false
+          }
+
+          if (response.status === 403) {
+            setSidebarError('This session is read-only.')
+            await refreshDocs()
+            return false
+          }
+
+          if (!response.ok) {
+            throw new Error(`status ${response.status}`)
+          }
+
+          await response.json().catch(() => null)
+        }
+
+        return true
+      } catch (error) {
+        console.error('Failed to reorder pages', error)
+        setSidebarError('Unable to reorder pages. Please try again.')
+        await refreshDocs()
+        return false
+      } finally {
+        setSidebarActionPending(false)
+      }
+    },
+    [
+      docs,
+      tokenInfo,
+      isReadOnly,
+      refreshDocs,
+      setSessionExpired,
+      setSidebarError,
+      setSidebarActionPending,
+      setDocs,
+    ]
+  )
+
   const handleDeletePage = useCallback(
     async (docId: string): Promise<boolean> => {
       if (!tokenInfo || isReadOnly) {
@@ -909,6 +1104,7 @@ function App() {
           onCreate={handleCreatePage}
           onRename={handleRenamePage}
           onDelete={handleDeletePage}
+          onMove={handleMovePage}
           error={sidebarError}
           pendingRenameId={pendingRenameId}
           onPendingRenameHandled={handlePendingRenameHandled}

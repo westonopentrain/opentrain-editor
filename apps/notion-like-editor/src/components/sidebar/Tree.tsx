@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { KeyboardEvent, ReactElement } from 'react'
+import type {
+  DragEvent,
+  KeyboardEvent,
+  MouseEvent,
+  ReactElement,
+} from 'react'
 
 import type { SidebarDoc } from './Sidebar'
 
@@ -14,8 +19,18 @@ interface TreeProps {
   onCreate: (parentId: string | null) => Promise<void> | void
   onRename: (docId: string, title: string) => Promise<boolean>
   onDelete: (docId: string) => Promise<boolean>
+  onMove: (
+    docId: string,
+    targetParentId: string | null,
+    targetIndex: number
+  ) => Promise<boolean>
   pendingRenameId: string | null
   onPendingRenameHandled?: (handledId: string | null) => void
+}
+
+type DropIndicator = {
+  id: string
+  position: 'before' | 'after'
 }
 
 export function Tree(props: TreeProps) {
@@ -30,12 +45,22 @@ export function Tree(props: TreeProps) {
     onCreate,
     onRename,
     onDelete,
+    onMove,
     pendingRenameId,
     onPendingRenameHandled,
   } = props
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftTitle, setDraftTitle] = useState('')
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(
+    null
+  )
+  const [childDropTarget, setChildDropTarget] = useState<string | null>(null)
+  const [rootDropActive, setRootDropActive] = useState(false)
 
   const docMap = useMemo(() => {
     const map = new Map<string, SidebarDoc>()
@@ -67,6 +92,16 @@ export function Tree(props: TreeProps) {
     return map
   }, [docs])
 
+  const rootDoc = useMemo(
+    () => (rootId ? docMap.get(rootId) ?? null : null),
+    [docMap, rootId]
+  )
+
+  const roots = useMemo(
+    () => (rootDoc ? [rootDoc] : childrenMap.get(null) ?? []),
+    [rootDoc, childrenMap]
+  )
+
   useEffect(() => {
     if (!editingId) {
       return
@@ -90,6 +125,32 @@ export function Tree(props: TreeProps) {
     setDraftTitle(target.title)
     onPendingRenameHandled?.(pendingRenameId)
   }, [pendingRenameId, docMap, canEdit, onPendingRenameHandled])
+
+  useEffect(() => {
+    if (!activeDocId) {
+      return
+    }
+    setCollapsedIds((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      let currentId: string | null = activeDocId
+      const visited = new Set<string>()
+      while (currentId) {
+        const parentId: string | null =
+          docMap.get(currentId)?.parentId ?? null
+        if (!parentId || visited.has(parentId)) {
+          break
+        }
+        if (next.has(parentId)) {
+          next.delete(parentId)
+          changed = true
+        }
+        visited.add(parentId)
+        currentId = parentId
+      }
+      return changed ? next : prev
+    })
+  }, [activeDocId, docMap])
 
   const handleStartRename = useCallback(
     (doc: SidebarDoc) => {
@@ -125,6 +186,144 @@ export function Tree(props: TreeProps) {
     [editingId, onDelete]
   )
 
+  const toggleCollapsed = useCallback((docId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) {
+        next.delete(docId)
+      } else {
+        next.add(docId)
+      }
+      return next
+    })
+  }, [])
+
+  const allowDrag = canEdit && !actionPending && !disableNavigation
+
+  const wouldCreateCycle = useCallback(
+    (dragId: string, targetParentId: string | null) => {
+      if (!targetParentId) {
+        return false
+      }
+      let current: string | null = targetParentId
+      const visited = new Set<string>()
+      while (current) {
+        if (current === dragId) {
+          return true
+        }
+        if (visited.has(current)) {
+          break
+        }
+        visited.add(current)
+        const parent = docMap.get(current)
+        current = parent?.parentId ?? null
+      }
+      return false
+    },
+    [docMap]
+  )
+
+  const canDropIntoParent = useCallback(
+    (dragId: string | null, parentId: string | null) => {
+      if (!dragId) {
+        return false
+      }
+      if (parentId === dragId) {
+        return false
+      }
+      if (wouldCreateCycle(dragId, parentId)) {
+        return false
+      }
+      return true
+    },
+    [wouldCreateCycle]
+  )
+
+  const canDropAlongside = useCallback(
+    (dragId: string | null, targetId: string) => {
+      if (!dragId || dragId === targetId) {
+        return false
+      }
+      const targetDoc = docMap.get(targetId)
+      if (!targetDoc) {
+        return false
+      }
+      const targetParent = targetDoc.parentId ?? null
+      if (targetParent === dragId) {
+        return false
+      }
+      if (wouldCreateCycle(dragId, targetParent)) {
+        return false
+      }
+      return true
+    },
+    [docMap, wouldCreateCycle]
+  )
+
+  const rootDropParentId = rootDoc ? rootDoc.id : null
+
+  const handleRootDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!allowDrag || !draggingId) {
+        return
+      }
+      if (!canDropIntoParent(draggingId, rootDropParentId)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setDropIndicator(null)
+      setChildDropTarget(null)
+      setRootDropActive(true)
+      event.dataTransfer.dropEffect = 'move'
+    },
+    [allowDrag, canDropIntoParent, draggingId, rootDropParentId]
+  )
+
+  const handleRootDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    const related = event.relatedTarget as Node | null
+    if (!related || !event.currentTarget.contains(related)) {
+      setRootDropActive(false)
+    }
+  }, [])
+
+  const handleRootDrop = useCallback(
+    async (event: DragEvent<HTMLDivElement>) => {
+      if (!draggingId) {
+        return
+      }
+      if (!canDropIntoParent(draggingId, rootDropParentId)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setRootDropActive(false)
+      setDropIndicator(null)
+      setChildDropTarget(null)
+
+      const siblings =
+        rootDropParentId !== null
+          ? childrenMap.get(rootDropParentId) ?? []
+          : childrenMap.get(null) ?? []
+
+      const dragId = draggingId
+
+      if (rootDropParentId) {
+        setCollapsedIds((prev) => {
+          if (!prev.has(rootDropParentId)) {
+            return prev
+          }
+          const next = new Set(prev)
+          next.delete(rootDropParentId)
+          return next
+        })
+      }
+
+      await onMove(dragId, rootDropParentId, siblings.length)
+    },
+    [draggingId, canDropIntoParent, rootDropParentId, childrenMap, onMove]
+  )
+
   const computeDescendantCount = useCallback(
     (docId: string) => {
       let count = 0
@@ -148,11 +347,37 @@ export function Tree(props: TreeProps) {
     const nodeTitle = isEditing ? draftTitle : node.title
     const indent = `${0.75 + depth * 0.75}rem`
     const childNodes = childrenMap.get(node.id) ?? []
+    const isCollapsible = childNodes.length > 0
+    const isCollapsed = isCollapsible && collapsedIds.has(node.id)
+    const isRootDoc = Boolean(rootId && node.id === rootId)
+    const allowNodeDrag = allowDrag && !isRootDoc && !isEditing
+
+    const nodeClassName = [
+      'notion-sidebar-tree__node',
+      dropIndicator?.id === node.id && dropIndicator.position === 'before'
+        ? 'is-drop-before'
+        : '',
+      dropIndicator?.id === node.id && dropIndicator.position === 'after'
+        ? 'is-drop-after'
+        : '',
+      draggingId === node.id ? 'is-dragging' : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
 
     const itemClassName = [
       'notion-sidebar-tree__item',
       isActive ? 'is-active' : '',
       isEditing ? 'is-editing' : '',
+      allowNodeDrag ? 'is-draggable' : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    const childrenClassName = [
+      'notion-sidebar-tree__children',
+      isCollapsed ? 'is-collapsed' : '',
+      childDropTarget === node.id ? 'is-drop-target' : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -214,9 +439,161 @@ export function Tree(props: TreeProps) {
       await handleRenameSubmit(node, draftTitle)
     }
 
+    const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
+      if (!allowNodeDrag) {
+        return
+      }
+      setDraggingId(node.id)
+      setDropIndicator(null)
+      setChildDropTarget(null)
+      setRootDropActive(false)
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', node.id)
+    }
+
+    const handleDragEnd = () => {
+      setDraggingId((current) => (current === node.id ? null : current))
+      setDropIndicator((current) =>
+        current && current.id === node.id ? null : current
+      )
+      setChildDropTarget((current) =>
+        current === node.id ? null : current
+      )
+      setRootDropActive(false)
+    }
+
+    const handleDragOverItem = (event: DragEvent<HTMLDivElement>) => {
+      if (!allowDrag || !draggingId || draggingId === node.id) {
+        return
+      }
+      if (!canDropAlongside(draggingId, node.id)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const rect = event.currentTarget.getBoundingClientRect()
+      const before = event.clientY < rect.top + rect.height / 2
+      setDropIndicator({ id: node.id, position: before ? 'before' : 'after' })
+      setChildDropTarget(null)
+      setRootDropActive(false)
+      event.dataTransfer.dropEffect = 'move'
+    }
+
+    const handleDragLeaveItem = (event: DragEvent<HTMLDivElement>) => {
+      if (!draggingId) {
+        return
+      }
+      const related = event.relatedTarget as Node | null
+      if (related && event.currentTarget.contains(related)) {
+        return
+      }
+      setDropIndicator((current) =>
+        current && current.id === node.id ? null : current
+      )
+    }
+
+    const handleDropOnItem = async (event: DragEvent<HTMLDivElement>) => {
+      const dragId = draggingId
+      if (!dragId || !canDropAlongside(dragId, node.id)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const indicator = dropIndicator
+      setDropIndicator(null)
+      setChildDropTarget(null)
+      setRootDropActive(false)
+      if (!indicator) {
+        return
+      }
+      const parentKey = node.parentId ?? null
+      const siblings = childrenMap.get(parentKey) ?? []
+      const targetIndex = siblings.findIndex((child) => child.id === node.id)
+      if (targetIndex === -1) {
+        return
+      }
+      const insertIndex =
+        indicator.position === 'before' ? targetIndex : targetIndex + 1
+      await onMove(dragId, parentKey, insertIndex)
+    }
+
+    const handleChildrenDragOver = (event: DragEvent<HTMLDivElement>) => {
+      if (!allowDrag || !draggingId) {
+        return
+      }
+      if (!canDropIntoParent(draggingId, node.id)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setDropIndicator(null)
+      setChildDropTarget(node.id)
+      setRootDropActive(false)
+      event.dataTransfer.dropEffect = 'move'
+    }
+
+    const handleChildrenDragLeave = (event: DragEvent<HTMLDivElement>) => {
+      const related = event.relatedTarget as Node | null
+      if (related && event.currentTarget.contains(related)) {
+        return
+      }
+      setChildDropTarget((current) => (current === node.id ? null : current))
+    }
+
+    const handleChildrenDrop = async (event: DragEvent<HTMLDivElement>) => {
+      const dragId = draggingId
+      if (!dragId || !canDropIntoParent(dragId, node.id)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setChildDropTarget((current) => (current === node.id ? null : current))
+      setDropIndicator(null)
+      setRootDropActive(false)
+      const targetChildren = childrenMap.get(node.id) ?? []
+      setCollapsedIds((prev) => {
+        if (!prev.has(node.id)) {
+          return prev
+        }
+        const next = new Set(prev)
+        next.delete(node.id)
+        return next
+      })
+      await onMove(dragId, node.id, targetChildren.length)
+    }
+
     return (
-      <div key={node.id} className="notion-sidebar-tree__node">
-        <div className={itemClassName} style={{ paddingLeft: indent }}>
+      <div key={node.id} className={nodeClassName}>
+        <div
+          className={itemClassName}
+          style={{ paddingLeft: indent }}
+          draggable={allowNodeDrag}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={allowDrag ? handleDragOverItem : undefined}
+          onDragLeave={allowDrag ? handleDragLeaveItem : undefined}
+          onDrop={allowDrag ? handleDropOnItem : undefined}
+        >
+          {isCollapsible ? (
+            <button
+              type="button"
+              className={`notion-sidebar-tree__toggle${
+                isCollapsed ? ' is-collapsed' : ''
+              }`}
+              onClick={() => toggleCollapsed(node.id)}
+              aria-label={
+                isCollapsed ? 'Expand subpages' : 'Collapse subpages'
+              }
+              aria-expanded={!isCollapsed}
+              onMouseDown={(event: MouseEvent<HTMLButtonElement>) => {
+                event.stopPropagation()
+              }}
+            >
+              <span aria-hidden>{isCollapsed ? '▸' : '▾'}</span>
+            </button>
+          ) : (
+            <span className="notion-sidebar-tree__toggle notion-sidebar-tree__toggle--spacer" />
+          )}
           {isEditing ? (
             <input
               className="notion-sidebar-tree__input"
@@ -273,17 +650,38 @@ export function Tree(props: TreeProps) {
             </div>
           ) : null}
         </div>
-        {childNodes.length ? (
-          <div className="notion-sidebar-tree__children">
-            {childNodes.map((child) => renderNode(child, depth + 1))}
-          </div>
-        ) : null}
+        <div
+          className={childrenClassName}
+          onDragOver={allowDrag ? handleChildrenDragOver : undefined}
+          onDragLeave={allowDrag ? handleChildrenDragLeave : undefined}
+          onDrop={allowDrag ? handleChildrenDrop : undefined}
+        >
+          {!isCollapsed
+            ? childNodes.map((child) => renderNode(child, depth + 1))
+            : null}
+        </div>
       </div>
     )
   }
 
-  const rootDoc = rootId ? docMap.get(rootId) ?? null : null
-  const roots = rootDoc ? [rootDoc] : childrenMap.get(null) ?? []
+  const canShowRootDrop =
+    allowDrag && draggingId !== null && canDropIntoParent(draggingId, rootDropParentId)
 
-  return <div className="notion-sidebar-tree">{roots.map((node) => renderNode(node, 0))}</div>
+  return (
+    <div className="notion-sidebar-tree">
+      {roots.map((node) => renderNode(node, 0))}
+      {canShowRootDrop ? (
+        <div
+          className={`notion-sidebar-tree__root-drop${
+            rootDropActive ? ' is-drop-target' : ''
+          }`}
+          onDragOver={handleRootDragOver}
+          onDragLeave={handleRootDragLeave}
+          onDrop={handleRootDrop}
+        >
+          {rootDropActive ? 'Drop here to move to main pages' : null}
+        </div>
+      ) : null}
+    </div>
+  )
 }

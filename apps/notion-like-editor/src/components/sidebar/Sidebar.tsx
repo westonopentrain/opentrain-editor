@@ -22,6 +22,11 @@ interface SidebarProps {
   onCreate: (parentId: string | null) => Promise<void> | void
   onRename: (docId: string, title: string) => Promise<boolean>
   onDelete: (docId: string) => Promise<boolean>
+  onMove: (
+    docId: string,
+    targetParentId: string | null,
+    targetIndex: number
+  ) => Promise<boolean>
   error?: string | null
   pendingRenameId: string | null
   onPendingRenameHandled?: (handledId: string | null) => void
@@ -40,6 +45,7 @@ export function Sidebar(props: SidebarProps) {
     onCreate,
     onRename,
     onDelete,
+    onMove,
     error,
     pendingRenameId,
     onPendingRenameHandled,
@@ -91,6 +97,7 @@ export function Sidebar(props: SidebarProps) {
             onCreate={onCreate}
             onRename={onRename}
             onDelete={onDelete}
+            onMove={onMove}
             pendingRenameId={pendingRenameId}
             onPendingRenameHandled={onPendingRenameHandled}
           />
