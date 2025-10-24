@@ -37,6 +37,7 @@ export interface SlashMenuConfig {
     [key in SlashMenuItemType]?: string
   }
   showGroups?: boolean
+  onRequestLoomUrl?: (editor: Editor) => void
 }
 
 const texts = {
@@ -155,7 +156,9 @@ const texts = {
 
 export type SlashMenuItemType = keyof typeof texts
 
-const getItemImplementations = () => {
+const getItemImplementations = (options?: {
+  onRequestLoomUrl?: (editor: Editor) => void
+}) => {
   return {
     // Style
     text: {
@@ -237,6 +240,11 @@ const getItemImplementations = () => {
           return
         }
 
+        if (options?.onRequestLoomUrl) {
+          options.onRequestLoomUrl(editor)
+          return
+        }
+
         const url = window.prompt("Paste Loom URL")?.trim()
         if (!url) {
           return
@@ -305,7 +313,9 @@ export function useSlashDropdownMenu(config?: SlashMenuConfig) {
         config?.enabledItems || (Object.keys(texts) as SlashMenuItemType[])
       const showGroups = config?.showGroups !== false
 
-      const itemImplementations = getItemImplementations()
+      const itemImplementations = getItemImplementations({
+        onRequestLoomUrl: config?.onRequestLoomUrl,
+      })
 
       enabledItems.forEach((itemType) => {
         const itemImpl = itemImplementations[itemType]

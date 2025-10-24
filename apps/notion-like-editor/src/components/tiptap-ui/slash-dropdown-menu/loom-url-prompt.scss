@@ -1,0 +1,31 @@
+.loom-url-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 1.5rem;
+}
+
+.loom-url-prompt-card {
+  width: min(420px, 100%);
+}
+
+.loom-url-prompt-heading {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.loom-url-prompt-error {
+  color: var(--tiptap-color-danger, #ef4444);
+  font-size: 0.875rem;
+}
+
+.loom-url-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
