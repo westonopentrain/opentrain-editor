@@ -61,7 +61,11 @@ export function canExecuteUndoRedoAction(
   if (!editor || !editor.isEditable) return false
   if (isNodeTypeSelected(editor, ["image"])) return false
 
-  return action === "undo" ? editor.can().undo() : editor.can().redo()
+  const commands = editor.can()
+  if (action === "undo") {
+    return typeof commands.undo === "function" ? commands.undo() : false
+  }
+  return typeof commands.redo === "function" ? commands.redo() : false
 }
 
 /**
@@ -75,7 +79,10 @@ export function executeUndoRedoAction(
   if (!canExecuteUndoRedoAction(editor, action)) return false
 
   const chain = editor.chain().focus()
-  return action === "undo" ? chain.undo().run() : chain.redo().run()
+  if (action === "undo") {
+    return typeof chain.undo === "function" ? chain.undo().run() : false
+  }
+  return typeof chain.redo === "function" ? chain.redo().run() : false
 }
 
 /**
